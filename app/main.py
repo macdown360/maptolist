@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from email.mime.text import MIMEText
 from pathlib import Path
 from typing import Annotated, Any
-from urllib.parse import urlparse
+from urllib.parse import quote_plus, urlparse
 import smtplib
 
 import httpx
@@ -31,6 +31,12 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
 SESSION_SECRET = os.getenv("SESSION_SECRET", secrets.token_hex(32))
+DISABLE_GOOGLE_LOGIN = os.getenv("DISABLE_GOOGLE_LOGIN", "false").lower() == "true"
+DEMO_USER_GOOGLE_ID = "local-demo-user"
+DEMO_USER_EMAIL = "demo@local"
+DEMO_USER_NAME = "Demo User"
+MY_LIST_STATUS_VALUES = {"new", "contacted", "nurturing", "closed", "excluded"}
+MY_LIST_PRIORITY_VALUES = {"high", "medium", "low"}
 
 PLACE_TYPE_LABELS: dict[str, str] = {
     "accounting": "会計事務所",
@@ -269,6 +275,20 @@ class BulkTagRequest(BaseModel):
     note: str = ""
 
 
+class MyListBulkAddRequest(BaseModel):
+    lead_ids: list[int] = Field(default_factory=list)
+    status: str = "new"
+    priority: str = "medium"
+    note: str = ""
+
+
+class MyListUpdateRequest(BaseModel):
+    status: str | None = None
+    priority: str | None = None
+    note: str | None = None
+    owner_name: str | None = None
+
+
 class GoogleMapsKeyRequest(BaseModel):
     api_key: str
 
@@ -399,6 +419,26 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS my_list_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                lead_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'new',
+                priority TEXT NOT NULL DEFAULT 'medium',
+                owner_name TEXT,
+                note TEXT,
+                added_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                last_contacted_at TEXT,
+                contact_count INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(user_id, lead_id),
+                FOREIGN KEY (lead_id) REFERENCES leads (id),
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+            """
+        )
         safe_add_column(conn, "leads", "user_id INTEGER")
 
 
@@ -449,11 +489,17 @@ def set_env_key(key: str, value: str) -> None:
 def get_current_user(request: Request) -> dict[str, Any] | None:
     user_id = request.session.get("user_id")
     if not user_id:
+        if is_auth_disabled():
+            return get_or_create_demo_user()
         return None
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-    return dict(row) if row else None
+    if row:
+        return dict(row)
+    if is_auth_disabled():
+        return get_or_create_demo_user()
+    return None
 
 
 def require_user(request: Request) -> dict[str, Any]:
@@ -463,8 +509,52 @@ def require_user(request: Request) -> dict[str, Any]:
     return user
 
 
+def is_auth_disabled() -> bool:
+    return DISABLE_GOOGLE_LOGIN or not is_google_oauth_configured()
+
+
+def get_or_create_demo_user() -> dict[str, Any]:
+    init_db()
+    now = now_iso()
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        conn.execute(
+            """
+            INSERT INTO users (google_id, email, name, picture, maps_api_key, gmail_access_token, gmail_refresh_token, gmail_token_expiry, created_at, updated_at)
+            VALUES (?, ?, ?, ?, '', '', '', '', ?, ?)
+            ON CONFLICT(google_id) DO UPDATE SET
+                email=excluded.email,
+                name=excluded.name,
+                updated_at=excluded.updated_at
+            """,
+            (DEMO_USER_GOOGLE_ID, DEMO_USER_EMAIL, DEMO_USER_NAME, "", now, now),
+        )
+        row = conn.execute("SELECT * FROM users WHERE google_id = ?", (DEMO_USER_GOOGLE_ID,)).fetchone()
+    return dict(row) if row else {}
+
+
 # FastAPI dependency alias
 CurrentUser = Annotated[dict[str, Any], Depends(require_user)]
+
+
+def validate_my_list_status(status: str) -> str:
+    normalized = status.strip().lower()
+    if normalized not in MY_LIST_STATUS_VALUES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"status は {sorted(MY_LIST_STATUS_VALUES)} のいずれかを指定してください",
+        )
+    return normalized
+
+
+def validate_my_list_priority(priority: str) -> str:
+    normalized = priority.strip().lower()
+    if normalized not in MY_LIST_PRIORITY_VALUES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"priority は {sorted(MY_LIST_PRIORITY_VALUES)} のいずれかを指定してください",
+        )
+    return normalized
 
 
 def upsert_user(
@@ -618,16 +708,32 @@ def log_audit(action: str, target_type: str, target_id: str, details: dict[str, 
         )
 
 
+def is_google_oauth_configured() -> bool:
+    return bool(GOOGLE_CLIENT_ID.strip() and GOOGLE_CLIENT_SECRET.strip())
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request) -> HTMLResponse:
     user = get_current_user(request)
     if not user:
-        return templates.TemplateResponse("login.html", {"request": request})
+        return templates.TemplateResponse(
+            "login.html",
+            {
+                "request": request,
+                "oauth_configured": is_google_oauth_configured(),
+                "oauth_error": request.query_params.get("oauth_error", ""),
+            },
+        )
     return templates.TemplateResponse("index.html", {"request": request, "user": user})
 
 
 @app.get("/auth/login")
 async def auth_login(request: Request) -> RedirectResponse:
+    if is_auth_disabled():
+        return RedirectResponse("/")
+    if not is_google_oauth_configured():
+        msg = "Google OAuthが未設定です。GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET を設定してください。"
+        return RedirectResponse(url=f"/?oauth_error={quote_plus(msg)}")
     redirect_uri = f"{APP_BASE_URL}/auth/callback"
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
@@ -1358,11 +1464,313 @@ def upsert_lead(item: dict[str, Any], user_id: int | None = None) -> None:
 
 
 def save_contact_log(lead_id: int, channel: str, status: str, subject: str, message: str) -> None:
+    created_at = now_iso()
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
             INSERT INTO contact_logs (lead_id, channel, status, subject, message, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (lead_id, channel, status, subject, message, now_iso()),
+            (lead_id, channel, status, subject, message, created_at),
         )
+        conn.execute(
+            """
+            UPDATE my_list_items
+            SET
+                contact_count = COALESCE(contact_count, 0) + 1,
+                last_contacted_at = ?,
+                updated_at = ?
+            WHERE lead_id = ?
+            """,
+            (created_at, created_at, lead_id),
+        )
+
+
+@app.get("/api/my-list")
+def get_my_list(
+    user: CurrentUser,
+    q: str = Query("", description="会社名や住所で検索"),
+    status: str = Query("", description="マイリスト状態フィルタ"),
+    priority: str = Query("", description="優先度フィルタ"),
+) -> dict[str, Any]:
+    init_db()
+
+    sql = """
+        SELECT
+            m.id,
+            m.user_id,
+            m.lead_id,
+            m.status,
+            m.priority,
+            m.owner_name,
+            m.note,
+            m.added_at,
+            m.updated_at,
+            m.last_contacted_at,
+            m.contact_count,
+            l.name,
+            l.website,
+            l.phone,
+            l.email,
+            l.address,
+            COALESCE(mt.category, l.category) AS effective_category,
+            COALESCE(mt.industry, l.industry) AS effective_industry
+        FROM my_list_items m
+        JOIN leads l ON l.id = m.lead_id
+        LEFT JOIN manual_tags mt ON mt.lead_id = l.id
+        WHERE m.user_id = ?
+    """
+    params: list[Any] = [user["id"]]
+
+    if q:
+        like_q = f"%{q}%"
+        sql += " AND (l.name LIKE ? OR l.address LIKE ? OR l.website LIKE ?)"
+        params.extend([like_q, like_q, like_q])
+    if status:
+        sql += " AND m.status = ?"
+        params.append(status)
+    if priority:
+        sql += " AND m.priority = ?"
+        params.append(priority)
+
+    sql += " ORDER BY m.updated_at DESC"
+
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(sql, params).fetchall()
+
+        statuses = conn.execute(
+            "SELECT DISTINCT status FROM my_list_items WHERE user_id = ? ORDER BY status",
+            (user["id"],),
+        ).fetchall()
+        priorities = conn.execute(
+            "SELECT DISTINCT priority FROM my_list_items WHERE user_id = ? ORDER BY priority",
+            (user["id"],),
+        ).fetchall()
+
+    return {
+        "items": [dict(r) for r in rows],
+        "filters": {
+            "statuses": [r[0] for r in statuses],
+            "priorities": [r[0] for r in priorities],
+        },
+    }
+
+
+@app.post("/api/my-list")
+def add_to_my_list(payload: MyListBulkAddRequest, user: CurrentUser) -> dict[str, Any]:
+    init_db()
+    if not payload.lead_ids:
+        raise HTTPException(status_code=400, detail="対象企業を選択してください")
+
+    status_value = validate_my_list_status(payload.status)
+    priority_value = validate_my_list_priority(payload.priority)
+
+    now = now_iso()
+    added = 0
+    updated = 0
+
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        existing_rows = conn.execute(
+            f"SELECT id FROM leads WHERE id IN ({','.join(['?'] * len(payload.lead_ids))}) AND user_id = ?",
+            [*payload.lead_ids, user["id"]],
+        ).fetchall()
+        valid_lead_ids = [int(r["id"]) for r in existing_rows]
+
+        if not valid_lead_ids:
+            raise HTTPException(status_code=404, detail="対象企業が見つかりません")
+
+        for lead_id in valid_lead_ids:
+            row = conn.execute(
+                "SELECT id FROM my_list_items WHERE user_id = ? AND lead_id = ?",
+                (user["id"], lead_id),
+            ).fetchone()
+            if row:
+                conn.execute(
+                    """
+                    UPDATE my_list_items
+                    SET status = ?, priority = ?, note = ?, updated_at = ?
+                    WHERE user_id = ? AND lead_id = ?
+                    """,
+                    (status_value, priority_value, payload.note, now, user["id"], lead_id),
+                )
+                updated += 1
+                continue
+
+            conn.execute(
+                """
+                INSERT INTO my_list_items (user_id, lead_id, status, priority, owner_name, note, added_at, updated_at, last_contacted_at, contact_count)
+                VALUES (?, ?, ?, ?, '', ?, ?, ?, NULL, 0)
+                """,
+                (user["id"], lead_id, status_value, priority_value, payload.note, now, now),
+            )
+            added += 1
+
+    log_audit(
+        "add_my_list",
+        "lead",
+        "bulk",
+        {
+            "lead_ids": payload.lead_ids,
+            "added": added,
+            "updated": updated,
+            "status": status_value,
+            "priority": priority_value,
+        },
+        actor=user["email"],
+    )
+    return {"added": added, "updated": updated, "total": added + updated}
+
+
+@app.patch("/api/my-list/{item_id}")
+def update_my_list_item(item_id: int, payload: MyListUpdateRequest, user: CurrentUser) -> dict[str, Any]:
+    init_db()
+    updates: list[str] = []
+    params: list[Any] = []
+
+    if payload.status is not None:
+        updates.append("status = ?")
+        params.append(validate_my_list_status(payload.status))
+    if payload.priority is not None:
+        updates.append("priority = ?")
+        params.append(validate_my_list_priority(payload.priority))
+    if payload.note is not None:
+        updates.append("note = ?")
+        params.append(payload.note)
+    if payload.owner_name is not None:
+        updates.append("owner_name = ?")
+        params.append(payload.owner_name)
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="更新項目がありません")
+
+    updates.append("updated_at = ?")
+    params.append(now_iso())
+    params.extend([item_id, user["id"]])
+
+    with sqlite3.connect(DB_PATH) as conn:
+        cur = conn.execute(
+            f"UPDATE my_list_items SET {', '.join(updates)} WHERE id = ? AND user_id = ?",
+            params,
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="マイリスト項目が見つかりません")
+
+    log_audit(
+        "update_my_list",
+        "my_list_item",
+        str(item_id),
+        {
+            "status": payload.status,
+            "priority": payload.priority,
+            "note": payload.note,
+            "owner_name": payload.owner_name,
+        },
+        actor=user["email"],
+    )
+    return {"ok": True, "id": item_id}
+
+
+@app.delete("/api/my-list/{item_id}")
+def remove_my_list_item(item_id: int, user: CurrentUser) -> dict[str, Any]:
+    init_db()
+    with sqlite3.connect(DB_PATH) as conn:
+        cur = conn.execute("DELETE FROM my_list_items WHERE id = ? AND user_id = ?", (item_id, user["id"]))
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="マイリスト項目が見つかりません")
+
+    log_audit("remove_my_list", "my_list_item", str(item_id), {}, actor=user["email"])
+    return {"ok": True, "id": item_id}
+
+
+@app.get("/api/contact-logs")
+def get_contact_logs(
+    user: CurrentUser,
+    lead_id: int | None = Query(None),
+    q: str = Query("", description="企業名・件名・本文検索"),
+    from_date: str = Query("", description="開始日(YYYY-MM-DD)"),
+    to_date: str = Query("", description="終了日(YYYY-MM-DD)"),
+    channel: str = Query(""),
+    status: str = Query(""),
+    limit: int = Query(200, ge=1, le=1000),
+) -> dict[str, Any]:
+    init_db()
+
+    sql = """
+        SELECT
+            c.id,
+            c.lead_id,
+            c.channel,
+            c.status,
+            c.subject,
+            c.message,
+            c.created_at,
+            l.name AS lead_name,
+            l.email AS lead_email,
+            l.website AS lead_website
+        FROM contact_logs c
+        JOIN leads l ON l.id = c.lead_id
+        WHERE l.user_id = ?
+    """
+    params: list[Any] = [user["id"]]
+
+    if lead_id is not None:
+        sql += " AND c.lead_id = ?"
+        params.append(lead_id)
+    if q:
+        like_q = f"%{q}%"
+        sql += " AND (l.name LIKE ? OR c.subject LIKE ? OR c.message LIKE ?)"
+        params.extend([like_q, like_q, like_q])
+    if from_date:
+        sql += " AND c.created_at >= ?"
+        params.append(f"{from_date}T00:00:00+00:00")
+    if to_date:
+        sql += " AND c.created_at <= ?"
+        params.append(f"{to_date}T23:59:59.999999+00:00")
+    if channel:
+        sql += " AND c.channel = ?"
+        params.append(channel)
+    if status:
+        sql += " AND c.status = ?"
+        params.append(status)
+
+    sql += " ORDER BY c.created_at DESC LIMIT ?"
+    params.append(limit)
+
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(sql, params).fetchall()
+
+    return {"items": [dict(r) for r in rows]}
+
+
+@app.get("/api/leads/{lead_id}/timeline")
+def get_lead_timeline(lead_id: int, user: CurrentUser, limit: int = Query(200, ge=1, le=1000)) -> dict[str, Any]:
+    init_db()
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        lead = conn.execute("SELECT * FROM leads WHERE id = ? AND user_id = ?", (lead_id, user["id"])).fetchone()
+        if not lead:
+            raise HTTPException(status_code=404, detail="企業が見つかりません")
+
+        logs = conn.execute(
+            """
+            SELECT id, lead_id, channel, status, subject, message, created_at
+            FROM contact_logs
+            WHERE lead_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (lead_id, limit),
+        ).fetchall()
+
+    return {
+        "lead": {
+            "id": lead["id"],
+            "name": lead["name"],
+            "email": lead["email"],
+            "website": lead["website"],
+        },
+        "items": [dict(r) for r in logs],
+    }

@@ -30,6 +30,8 @@
         <button class="menu-item" data-view="settings">APIキー設定</button>
         <button class="menu-item" data-view="import">データ取得</button>
         <button class="menu-item" data-view="leads">企業一覧・検索</button>
+        <button class="menu-item" data-view="my-list">マイリスト</button>
+        <button class="menu-item" data-view="history">履歴</button>
         <button class="menu-item" data-view="contact">連絡実行</button>
         <button class="menu-item" data-view="tags">手動タグ</button>
         <button class="menu-item" data-view="suppression">配信停止</button>
@@ -108,6 +110,26 @@
             <label>業界<select name="industry"><option value="">すべて</option></select></label>
             <button type="submit">再検索</button>
           </form>
+          <div class="inline-actions">
+            <button id="add-to-my-list" type="button" class="ghost">選択をマイリストへ追加</button>
+            <label>初期ステータス
+              <select id="my-list-default-status">
+                <option value="new">new</option>
+                <option value="contacted">contacted</option>
+                <option value="nurturing">nurturing</option>
+                <option value="closed">closed</option>
+                <option value="excluded">excluded</option>
+              </select>
+            </label>
+            <label>優先度
+              <select id="my-list-default-priority">
+                <option value="high">high</option>
+                <option value="medium" selected>medium</option>
+                <option value="low">low</option>
+              </select>
+            </label>
+          </div>
+          <p id="my-list-add-result" class="muted"></p>
           <div class="table-wrap">
             <table id="lead-table">
               <thead>
@@ -122,6 +144,137 @@
                   <th>電話</th>
                   <th>メール</th>
                   <th>住所</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-my-list">
+        <div class="panel">
+          <h3>マイリスト</h3>
+          <form id="my-list-filter-form" class="form-grid compact">
+            <label>検索<input name="q" placeholder="会社名/住所/URL" /></label>
+            <label>ステータス
+              <select name="status">
+                <option value="">すべて</option>
+              </select>
+            </label>
+            <label>優先度
+              <select name="priority">
+                <option value="">すべて</option>
+                <option value="high">high</option>
+                <option value="medium">medium</option>
+                <option value="low">low</option>
+              </select>
+            </label>
+            <button type="submit">再検索</button>
+          </form>
+
+          <form id="my-list-update-form" class="form-grid compact">
+            <label>更新ステータス
+              <select name="status">
+                <option value="">変更しない</option>
+                <option value="new">new</option>
+                <option value="contacted">contacted</option>
+                <option value="nurturing">nurturing</option>
+                <option value="closed">closed</option>
+                <option value="excluded">excluded</option>
+              </select>
+            </label>
+            <label>更新優先度
+              <select name="priority">
+                <option value="">変更しない</option>
+                <option value="high">high</option>
+                <option value="medium">medium</option>
+                <option value="low">low</option>
+              </select>
+            </label>
+            <label>メモ
+              <input name="note" placeholder="次回連絡予定など" />
+            </label>
+            <label>担当者
+              <input name="owner_name" placeholder="担当者名" />
+            </label>
+            <button type="submit">選択項目を更新</button>
+            <button id="my-list-remove-btn" type="button" class="ghost">選択項目を削除</button>
+            <button id="my-list-send-btn" type="button" class="ghost">選択項目へメール送信</button>
+          </form>
+
+          <p id="my-list-result" class="muted"></p>
+
+          <div class="table-wrap">
+            <table id="my-list-table">
+              <thead>
+                <tr>
+                  <th><input type="checkbox" id="my-list-select-all" /></th>
+                  <th>会社名</th>
+                  <th>業種</th>
+                  <th>業界</th>
+                  <th>ステータス</th>
+                  <th>優先度</th>
+                  <th>最終送信日時</th>
+                  <th>送信回数</th>
+                  <th>メール</th>
+                  <th>住所</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-history">
+        <div class="panel">
+          <h3>アプローチ履歴</h3>
+          <form id="history-filter-form" class="form-grid compact">
+            <label>企業名/件名/本文
+              <input name="q" placeholder="会社名や件名で検索" />
+            </label>
+            <label>開始日
+              <input name="from_date" type="date" />
+            </label>
+            <label>終了日
+              <input name="to_date" type="date" />
+            </label>
+            <label>チャネル
+              <select name="channel">
+                <option value="">すべて</option>
+                <option value="email">email</option>
+                <option value="form">form</option>
+              </select>
+            </label>
+            <label>結果
+              <select name="status">
+                <option value="">すべて</option>
+                <option value="sent">sent</option>
+                <option value="dry_run">dry_run</option>
+                <option value="skipped">skipped</option>
+                <option value="failed">failed</option>
+                <option value="suppressed">suppressed</option>
+                <option value="daily_limit">daily_limit</option>
+                <option value="no_adapter">no_adapter</option>
+              </select>
+            </label>
+            <label>最大件数
+              <input name="limit" type="number" min="1" max="1000" value="200" />
+            </label>
+            <button type="submit">再取得</button>
+          </form>
+          <p id="history-result" class="muted"></p>
+          <div class="table-wrap">
+            <table id="history-table">
+              <thead>
+                <tr>
+                  <th>日時</th>
+                  <th>企業名</th>
+                  <th>チャネル</th>
+                  <th>結果</th>
+                  <th>件名</th>
+                  <th>詳細</th>
                 </tr>
               </thead>
               <tbody></tbody>

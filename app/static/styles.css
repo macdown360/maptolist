@@ -224,6 +224,14 @@ body {
   align-items: end;
 }
 
+.inline-actions {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 240px repeat(2, minmax(160px, 220px));
+  gap: 10px;
+  align-items: end;
+}
+
 label {
   display: grid;
   gap: 5px;
@@ -393,6 +401,63 @@ td {
   width: 160px;
 }
 
+#my-list-table th:nth-child(1),
+#my-list-table td:nth-child(1) {
+  width: 36px;
+}
+
+#my-list-table th:nth-child(2),
+#my-list-table td:nth-child(2) {
+  width: 160px;
+}
+
+#my-list-table th:nth-child(3),
+#my-list-table td:nth-child(3),
+#my-list-table th:nth-child(4),
+#my-list-table td:nth-child(4),
+#my-list-table th:nth-child(5),
+#my-list-table td:nth-child(5),
+#my-list-table th:nth-child(6),
+#my-list-table td:nth-child(6) {
+  width: 90px;
+}
+
+#my-list-table th:nth-child(7),
+#my-list-table td:nth-child(7),
+#my-list-table th:nth-child(8),
+#my-list-table td:nth-child(8) {
+  width: 110px;
+}
+
+#my-list-table th:nth-child(9),
+#my-list-table td:nth-child(9),
+#my-list-table th:nth-child(10),
+#my-list-table td:nth-child(10) {
+  width: 160px;
+}
+
+#history-table th:nth-child(1),
+#history-table td:nth-child(1) {
+  width: 170px;
+}
+
+#history-table th:nth-child(2),
+#history-table td:nth-child(2) {
+  width: 180px;
+}
+
+#history-table th:nth-child(3),
+#history-table td:nth-child(3),
+#history-table th:nth-child(4),
+#history-table td:nth-child(4) {
+  width: 90px;
+}
+
+#history-table th:nth-child(5),
+#history-table td:nth-child(5) {
+  width: 220px;
+}
+
 th {
   background: #eef3fb;
 }
@@ -482,5 +547,9 @@ th {
 
   table {
     min-width: 720px;
+  }
+
+  .inline-actions {
+    grid-template-columns: 1fr;
   }
 }
