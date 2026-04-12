@@ -1,4 +1,4 @@
-# MaptoList Lead Collector (MVP)
+# Map to List Lead Collector (MVP)
 
 Google Places APIを使って、幅広い業種・業態の企業情報を収集し、
 一覧表示・フィルタ・メール連絡を行うMVPです。
@@ -50,7 +50,7 @@ export SMTP_PORT="587"
 export SMTP_USER="user@example.com"
 export SMTP_PASS="password"
 export FROM_EMAIL="sales@example.com"
-export CONTACT_FROM_NAME="MaptoList"
+export CONTACT_FROM_NAME="Map to List"
 ```
 
 ※ デフォルトでは `EMAIL_DRY_RUN=true` で実際には送信されず、ログ保存のみ行います。

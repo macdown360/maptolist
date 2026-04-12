@@ -533,7 +533,7 @@ function exportSelectedLeadsAsCsv() {
   }
 
   const csvContent = `\ufeff${lines.join('\r\n')}`;
-  downloadTextAsFile(csvContent, `maptolist-leads-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv;charset=utf-8;');
+  downloadTextAsFile(csvContent, `map-to-list-leads-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv;charset=utf-8;');
 
   const msg = `${rows.length}件をCSV出力しました`;
   if (exportResult) exportResult.textContent = msg;
@@ -584,7 +584,7 @@ function exportSelectedLeadsAsExcel() {
       <th>更新日時</th>
     </tr>${trHtml}</table></body></html>`;
 
-  downloadTextAsFile(tableHtml, `maptolist-leads-${new Date().toISOString().slice(0, 10)}.xls`, 'application/vnd.ms-excel;charset=utf-8;');
+  downloadTextAsFile(tableHtml, `map-to-list-leads-${new Date().toISOString().slice(0, 10)}.xls`, 'application/vnd.ms-excel;charset=utf-8;');
 
   const msg = `${rows.length}件をExcel出力しました`;
   if (exportResult) exportResult.textContent = msg;

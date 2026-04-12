@@ -232,7 +232,7 @@ TYPE_PRIORITY: list[str] = [
     "train_station",
 ]
 
-app = FastAPI(title="MaptoList Lead Collector", version="0.3.0")
+app = FastAPI(title="Map to List Lead Collector", version="0.3.0")
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, max_age=86400 * 30, https_only=False)
 if CORS_ALLOW_ORIGINS:
     app.add_middleware(
@@ -1260,7 +1260,7 @@ def send_form(payload: ContactRequest, user: CurrentUser) -> dict[str, Any]:
 
     dry_run = os.getenv("FORM_DRY_RUN", "true").lower() == "true"
     from_email = user["email"]
-    from_name = user.get("name") or os.getenv("CONTACT_FROM_NAME", "MaptoList")
+    from_name = user.get("name") or os.getenv("CONTACT_FROM_NAME", "Map to List")
 
     sent = 0
     skipped = 0
