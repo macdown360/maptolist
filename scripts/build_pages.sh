@@ -16,8 +16,8 @@ sed -i 's|/static/styles.css|./styles.css|g' "$OUT_DIR/index.html"
 sed -i 's|/static/favicon.svg|./favicon.svg|g' "$OUT_DIR/index.html"
 sed -i 's|/static/app.js|./app.js|g' "$OUT_DIR/index.html"
 
-# Pages配信時のAPI先を切り替える。REPO変数を優先し、未設定時はプレースホルダを使う。
-API_BASE_URL="${PAGES_API_BASE_URL:-https://YOUR-BACKEND-URL}"
+# Pages配信時のAPI先を切り替える。未設定時は空文字を入れて、フロント側で明示エラーにする。
+API_BASE_URL="${PAGES_API_BASE_URL:-}"
 awk -v api_url="$API_BASE_URL" '
   /<script src="\.\/app\.js"><\/script>/ {
     print "  <script>window.__API_BASE_URL = \"" api_url "\";</script>";

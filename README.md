@@ -170,3 +170,13 @@ GitHub Pages のURLが `https://<owner>.github.io/<repo>/` の場合でも、
 
 ビルド時に `scripts/build_pages.sh` が静的ファイルを生成し、
 Pages側のフロントから `PAGES_API_BASE_URL` へAPIリクエストします。
+
+### APIキー設定が保存できない場合
+
+GitHub Pages公開時に `APIキー設定` が保存できない主な原因は次の2つです。
+
+- `PAGES_API_BASE_URL` が未設定で、Pages側からバックエンドURLが分からない
+- Pages (`github.io`) から別ドメインのFastAPIへアクセスする際に認証Cookieが必要
+
+このリポジトリでは、Pages公開時に認証Cookieを含めてAPIへアクセスするよう対応済みです。
+そのため、まず GitHub Actions Variables に `PAGES_API_BASE_URL` を正しく設定してください。

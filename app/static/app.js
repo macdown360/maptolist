@@ -65,6 +65,7 @@ let placeTypeItems = [];
 let leadSortBy = 'updated_at';
 let leadSortDir = 'desc';
 const API_BASE_URL = String(window.__API_BASE_URL || '').trim().replace(/\/$/, '');
+const IS_PLACEHOLDER_API_BASE_URL = API_BASE_URL === 'https://YOUR-BACKEND-URL';
 
 const STATUS_LABELS = {
   new: '未対応',
@@ -112,13 +113,30 @@ function toLogStatusLabel(value) {
 }
 
 async function apiFetch(url, options = {}) {
+  if (IS_PLACEHOLDER_API_BASE_URL) {
+    throw new Error('PAGES_API_BASE_URL が未設定です。GitHub Actions Variables に本番API URLを設定してください。');
+  }
+
   let requestUrl = String(url || '');
   if (API_BASE_URL && requestUrl.startsWith('/')) {
     requestUrl = `${API_BASE_URL}${requestUrl}`;
   }
-  const res = await fetch(requestUrl, options);
+
+  const requestOptions = {
+    credentials: API_BASE_URL ? 'include' : 'same-origin',
+    ...options,
+  };
+
+  let res;
+  try {
+    res = await fetch(requestUrl, requestOptions);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new Error(`API接続に失敗しました: ${reason}`);
+  }
+
   if (res.status === 401) {
-    window.location.href = '/';
+    window.location.href = API_BASE_URL ? `${API_BASE_URL}/` : '/';
     return null;
   }
   return res;
@@ -836,7 +854,13 @@ async function fetchAuditLogs() {
 }
 
 async function fetchGoogleKeyStatus() {
-  const res = await apiFetch('/api/settings/google-maps-key');
+  let res;
+  try {
+    res = await apiFetch('/api/settings/google-maps-key');
+  } catch (err) {
+    googleKeyStatus.textContent = err instanceof Error ? err.message : String(err);
+    return;
+  }
   if (!res) return;
   const data = await res.json();
   if (!res.ok) {
@@ -1196,11 +1220,17 @@ googleKeyForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
   const formData = new FormData(googleKeyForm);
   const payload = { api_key: formData.get('api_key') };
-  const res = await apiFetch('/api/settings/google-maps-key', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+  let res;
+  try {
+    res = await apiFetch('/api/settings/google-maps-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    googleKeyStatus.textContent = err instanceof Error ? `保存エラー: ${err.message}` : `保存エラー: ${String(err)}`;
+    return;
+  }
   if (!res) return;
   const data = await res.json();
 
