@@ -1,4 +1,4 @@
-# AutoSales Lead Collector (MVP)
+# MaptoList Lead Collector (MVP)
 
 Google Places APIを使って、幅広い業種・業態の企業情報を収集し、
 一覧表示・フィルタ・メール連絡を行うMVPです。
@@ -50,7 +50,7 @@ export SMTP_PORT="587"
 export SMTP_USER="user@example.com"
 export SMTP_PASS="password"
 export FROM_EMAIL="sales@example.com"
-export CONTACT_FROM_NAME="AutoSales"
+export CONTACT_FROM_NAME="MaptoList"
 ```
 
 ※ デフォルトでは `EMAIL_DRY_RUN=true` で実際には送信されず、ログ保存のみ行います。
@@ -154,8 +154,9 @@ DISABLE_GOOGLE_LOGIN=false
 CORS_ALLOW_ORIGINS=https://macdown360.github.io
 ```
 
-このリポジトリのPages URLは `https://macdown360.github.io/autosales/` です。
-そのため `CORS_ALLOW_ORIGINS` は `https://macdown360.github.io` を設定してください。
+GitHub Pages のURLが `https://<owner>.github.io/<repo>/` の場合でも、
+`CORS_ALLOW_ORIGINS` にはオリジン部分の `https://<owner>.github.io` を設定してください。
+例: `https://macdown360.github.io/maptolist/` で公開する場合は `https://macdown360.github.io`
 
 ### 2. GitHub Pagesデプロイ
 

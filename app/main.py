@@ -24,7 +24,9 @@ from dotenv import load_dotenv
 from starlette.middleware.sessions import SessionMiddleware
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DB_PATH = BASE_DIR / "autosales.db"
+DB_PATH = BASE_DIR / "maptolist.db"
+LEGACY_DB_PATH = BASE_DIR / "autosales.db"
+INTERMEDIATE_DB_PATH = BASE_DIR / "mapgene.db"
 load_dotenv(BASE_DIR / ".env")
 EMAIL_REGEX = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 POSTAL_CODE_REGEX = re.compile(r"〒?\s*(\d{3})[-ー]?\s*(\d{4})")
@@ -230,7 +232,7 @@ TYPE_PRIORITY: list[str] = [
     "train_station",
 ]
 
-app = FastAPI(title="AutoSales Lead Collector", version="0.3.0")
+app = FastAPI(title="MaptoList Lead Collector", version="0.3.0")
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, max_age=86400 * 30, https_only=False)
 if CORS_ALLOW_ORIGINS:
     app.add_middleware(
@@ -316,6 +318,11 @@ def startup() -> None:
 
 
 def init_db() -> None:
+    if not DB_PATH.exists() and INTERMEDIATE_DB_PATH.exists():
+        INTERMEDIATE_DB_PATH.replace(DB_PATH)
+    if not DB_PATH.exists() and LEGACY_DB_PATH.exists():
+        LEGACY_DB_PATH.replace(DB_PATH)
+
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
@@ -1253,7 +1260,7 @@ def send_form(payload: ContactRequest, user: CurrentUser) -> dict[str, Any]:
 
     dry_run = os.getenv("FORM_DRY_RUN", "true").lower() == "true"
     from_email = user["email"]
-    from_name = user.get("name") or os.getenv("CONTACT_FROM_NAME", "AutoSales")
+    from_name = user.get("name") or os.getenv("CONTACT_FROM_NAME", "MaptoList")
 
     sent = 0
     skipped = 0

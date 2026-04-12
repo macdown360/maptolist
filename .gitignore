@@ -5,4 +5,6 @@ __pycache__/
 .venv/
 .env
 autosales.db
+mapgene.db
+maptolist.db
 public/
