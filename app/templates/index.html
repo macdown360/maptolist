@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoSales Workspace</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1>AutoSales</h1>
+        <p>Lead Workspace</p>
+      </div>
+
+      <nav class="menu" id="view-menu">
+        <button class="menu-item active" data-view="dashboard">ダッシュボード</button>
+        <button class="menu-item" data-view="settings">APIキー設定</button>
+        <button class="menu-item" data-view="import">データ取得</button>
+        <button class="menu-item" data-view="leads">企業一覧・検索</button>
+        <button class="menu-item" data-view="contact">連絡実行</button>
+        <button class="menu-item" data-view="tags">手動タグ</button>
+        <button class="menu-item" data-view="suppression">配信停止</button>
+        <button class="menu-item" data-view="adapters">フォームアダプタ</button>
+        <button class="menu-item" data-view="audit">監査ログ</button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <p id="limit-result">上限を読み込み中...</p>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="workspace-head">
+        <h2>営業リード運用コンソール</h2>
+      </header>
+
+      <section class="view active" id="view-dashboard">
+        <div class="chat-surface" id="activity-feed"></div>
+      </section>
+
+      <section class="view" id="view-settings">
+        <div class="panel">
+          <h3>Google Maps APIキー設定</h3>
+          <form id="google-key-form" class="form-grid compact">
+            <label>GOOGLE_MAPS_API_KEY
+              <input name="api_key" type="password" required placeholder="AIza..." />
+            </label>
+            <button type="submit">保存</button>
+          </form>
+          <p id="google-key-status" class="muted"></p>
+          <div class="simple-list">
+            <div class="row"><strong>作業手順</strong></div>
+            <div class="row">1. Google Cloudをお持ちでない場合: Googleアカウント作成 → Google Cloud Console にサインイン</div>
+            <div class="row">2. 初回利用時は利用規約に同意し、請求先アカウント（課金）を作成する</div>
+            <div class="row">3. 「プロジェクトを選択」→「新しいプロジェクト」でプロジェクトを作成する</div>
+            <div class="row">4. 「APIとサービス」→「ライブラリ」で Places API を有効化する</div>
+            <div class="row">5. 「APIとサービス」→「認証情報」→「認証情報を作成」→「APIキー」を作成する</div>
+            <div class="row">6. 作成したキーの「APIの制限」で Places API のみ許可する</div>
+            <div class="row">7. 必要に応じて「アプリケーションの制限」を設定する（最初は制限を弱めて疎通確認推奨）</div>
+            <div class="row">8. 左メニューの「APIキー設定」でキーを入力して保存する</div>
+            <div class="row">9. 「設定済み: xxxxxx...xxxx」が表示されることを確認する</div>
+            <div class="row">10. 「データ取得」で「工務店 東京」などを指定して取り込みを実行する</div>
+            <div class="row">11. 失敗時は監査ログとGoogle Cloudのエラー（課金、API制限、リファラ/IP制限）を確認する</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-import">
+        <div class="panel">
+          <h3>Google Places 取り込み</h3>
+          <form id="import-form" class="form-grid">
+            <label>キーワード<input name="query" required placeholder="例: 工務店 東京" /></label>
+            <label>地域<input name="region" placeholder="例: 新宿区" /></label>
+            <label>最大件数<input type="number" name="max_results" min="1" max="60" value="20" /></label>
+            <button type="submit">取得開始</button>
+          </form>
+          <p id="import-result" class="muted"></p>
+        </div>
+      </section>
+
+      <section class="view" id="view-leads">
+        <div class="panel">
+          <h3>企業一覧・フィルタ</h3>
+          <form id="filter-form" class="form-grid compact">
+            <label>検索<input name="q" placeholder="会社名/住所/URL" /></label>
+            <label>業種<select name="category"><option value="">すべて</option></select></label>
+            <label>業界<select name="industry"><option value="">すべて</option></select></label>
+            <button type="submit">再検索</button>
+          </form>
+          <div class="table-wrap">
+            <table id="lead-table">
+              <thead>
+                <tr>
+                  <th><input type="checkbox" id="select-all" /></th>
+                  <th>会社名</th>
+                  <th>有効業種</th>
+                  <th>有効業界</th>
+                  <th>評価</th>
+                  <th>評価件数</th>
+                  <th>Web</th>
+                  <th>電話</th>
+                  <th>メール</th>
+                  <th>住所</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-contact">
+        <div class="panel">
+          <h3>連絡実行</h3>
+          <form id="contact-form" class="form-grid">
+            <label>送信チャネル
+              <select name="channel">
+                <option value="email">メール</option>
+                <option value="form">問い合わせフォーム</option>
+              </select>
+            </label>
+            <label>件名<input name="subject" required placeholder="ご提案のご連絡" /></label>
+            <label>本文
+              <textarea name="body" rows="8" required placeholder="例: 株式会社〇〇 御中&#10;&#10;突然のご連絡失礼いたします。〇〇株式会社の△△と申します。&#10;貴社のご発展を拝察し、ご提案の機会をいただきたくご連絡いたしました。"></textarea>
+            </label>
+            <div class="hint-box">
+              <p class="hint-title">📌 本文に会社情報を自動で差し込む</p>
+              <p class="hint-desc">以下のキーワードを本文中に記述すると、送信時に各企業の情報に置き換えられます。</p>
+              <ul class="hint-list">
+                <li><code>{{company_name}}</code> — 会社名</li>
+                <li><code>{{company_address}}</code> — 住所</li>
+                <li><code>{{company_phone}}</code> — 電話番号</li>
+                <li><code>{{company_website}}</code> — WebサイトURL</li>
+              </ul>
+              <p class="hint-example">例: <code>{{company_name}} 御中　いつも大変お世話になっております。</code></p>
+            </div>
+            <button type="submit">✉ 選択した企業へ送信</button>
+          </form>
+          <p id="contact-result" class="muted"></p>
+        </div>
+      </section>
+
+      <section class="view" id="view-tags">
+        <div class="panel">
+          <h3>手動タグ編集（一括）</h3>
+          <form id="tag-form" class="form-grid compact">
+            <label>業種<input name="category" placeholder="工務店" /></label>
+            <label>業界<input name="industry" placeholder="住宅" /></label>
+            <label>メモ<input name="note" placeholder="判断理由" /></label>
+            <button type="submit">保存</button>
+          </form>
+          <p id="tag-result" class="muted"></p>
+        </div>
+      </section>
+
+      <section class="view" id="view-suppression">
+        <div class="panel">
+          <h3>配信停止管理</h3>
+          <form id="suppression-form" class="form-grid compact">
+            <label>メールアドレス<input name="email" type="email" required placeholder="example@company.jp" /></label>
+            <label>理由<input name="reason" value="user_request" /></label>
+            <button type="submit">追加</button>
+          </form>
+          <p id="suppression-result" class="muted"></p>
+          <div id="suppression-list" class="simple-list"></div>
+        </div>
+      </section>
+
+      <section class="view" id="view-adapters">
+        <div class="panel">
+          <h3>フォーム送信アダプタ</h3>
+          <form id="adapter-form" class="form-grid compact">
+            <label>アダプタ名<input name="name" required placeholder="A社フォーム" /></label>
+            <label>ドメイン<input name="domain" required placeholder="example.com" /></label>
+            <label>送信パス<input name="path" required placeholder="/contact/submit" /></label>
+            <button type="submit">登録/更新</button>
+          </form>
+          <p id="adapter-result" class="muted"></p>
+          <div id="adapter-list" class="simple-list"></div>
+        </div>
+      </section>
+
+      <section class="view" id="view-audit">
+        <div class="panel">
+          <h3>監査ログ</h3>
+          <button id="audit-refresh" class="ghost">最新化</button>
+          <div id="audit-list" class="simple-list"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
