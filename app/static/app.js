@@ -27,6 +27,7 @@ const auditRefresh = document.querySelector('#audit-refresh');
 const activityFeed = document.querySelector('#activity-feed');
 
 const leadsTbody = document.querySelector('#lead-table tbody');
+const leadsThead = document.querySelector('#lead-table thead');
 const myListTbody = document.querySelector('#my-list-table tbody');
 const historyTbody = document.querySelector('#history-table tbody');
 
@@ -58,6 +59,8 @@ const myListDefaultPriority = document.querySelector('#my-list-default-priority'
 let currentItems = [];
 let myListItems = [];
 let placeTypeItems = [];
+let leadSortBy = 'updated_at';
+let leadSortDir = 'desc';
 
 const STATUS_LABELS = {
   new: '未対応',
@@ -193,6 +196,57 @@ function renderLeadsTable(items) {
     `,
     )
     .join('');
+}
+
+function updateLeadSortIndicators() {
+  if (!leadsThead) return;
+
+  leadsThead.querySelectorAll('th.sortable').forEach((th) => {
+    th.classList.remove('sorted-asc', 'sorted-desc');
+    const thSort = String(th.dataset.sort || '');
+    if (thSort && thSort === leadSortBy) {
+      th.classList.add(leadSortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+    }
+  });
+}
+
+function compareNullable(a, b, direction) {
+  const dir = direction === 'asc' ? 1 : -1;
+  const av = a ?? '';
+  const bv = b ?? '';
+
+  if (typeof av === 'number' || typeof bv === 'number') {
+    const an = Number(av || 0);
+    const bn = Number(bv || 0);
+    if (an === bn) return 0;
+    return an > bn ? dir : -dir;
+  }
+
+  const as = String(av).toLowerCase();
+  const bs = String(bv).toLowerCase();
+  if (as === bs) return 0;
+  return as > bs ? dir : -dir;
+}
+
+function sortLeadItemsClientSide(items, sortBy, sortDir) {
+  const keyMap = {
+    updated_at: 'updated_at',
+    address: 'address',
+    name: 'name',
+    category: 'effective_category',
+    industry: 'effective_industry',
+    rating: 'rating',
+    user_ratings_total: 'user_ratings_total',
+  };
+
+  const key = keyMap[sortBy];
+  if (!key) return items;
+
+  return [...items].sort((a, b) => {
+    const primary = compareNullable(a[key], b[key], sortDir);
+    if (primary !== 0) return primary;
+    return compareNullable(a.updated_at, b.updated_at, 'desc');
+  });
 }
 
 function renderMyListTable(items) {
@@ -410,14 +464,28 @@ function getSelectedMyListLeadIds() {
 
 async function fetchLeads() {
   const params = new URLSearchParams(new FormData(filterForm));
+  params.set('sort_by', leadSortBy);
+  params.set('sort_dir', leadSortDir);
   const res = await apiFetch(`/api/leads?${params.toString()}`);
   if (!res) return;
   const data = await res.json();
 
-  currentItems = data.items || [];
+  if (!res.ok) {
+    addActivity(`一覧取得エラー: ${data.detail || 'unknown'}`, 'system');
+    return;
+  }
+
+  currentItems = sortLeadItemsClientSide(data.items || [], leadSortBy, leadSortDir);
   renderLeadsTable(currentItems);
+  if (data.sort) {
+    leadSortBy = data.sort.sort_by || leadSortBy;
+    leadSortDir = data.sort.sort_dir || leadSortDir;
+    currentItems = sortLeadItemsClientSide(currentItems, leadSortBy, leadSortDir);
+    renderLeadsTable(currentItems);
+  }
   renderOptions(categorySelect, data.filters.categories || [], filterForm.category.value);
   renderOptions(industrySelect, data.filters.industries || [], filterForm.industry.value);
+  updateLeadSortIndicators();
   if (limitResult) {
     limitResult.textContent = `本日上限 ${data.send_limit.daily_limit}件 / email残 ${data.send_limit.email_remaining} / form残 ${data.send_limit.form_remaining}`;
   }
@@ -748,6 +816,30 @@ filterForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
   await fetchLeads();
   addActivity(`一覧を更新: ${currentItems.length}件`, 'system');
+});
+
+if (filterForm) {
+  // ソートは列ヘッダクリックでのみ操作する。
+}
+
+leadsThead?.addEventListener('click', async (e) => {
+  const target = e.target;
+  if (!(target instanceof Element)) return;
+
+  const th = target.closest('th.sortable');
+  if (!th) return;
+
+  const nextSortBy = String(th.dataset.sort || '').trim();
+  if (!nextSortBy) return;
+
+  if (leadSortBy === nextSortBy) {
+    leadSortDir = leadSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    leadSortBy = nextSortBy;
+    leadSortDir = 'asc';
+  }
+
+  await fetchLeads();
 });
 
 myListFilterForm?.addEventListener('submit', async (e) => {

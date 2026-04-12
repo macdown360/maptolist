@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AutoSales Workspace</title>
+  <title>Map Gene Workspace</title>
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <h1>AutoSales</h1>
-        <p>Lead Workspace</p>
+        <h1>Map Gene</h1>
+        <p>List generate workspace</p>
       </div>
 
       <nav class="menu" id="view-menu">
@@ -23,7 +23,7 @@
 
     <main class="workspace">
       <header class="workspace-head">
-        <h2>営業リスト収集ワークスペース</h2>
+        <h2>リスト作成ワークスペース</h2>
       </header>
 
       <section class="view" id="view-settings">
@@ -74,23 +74,6 @@
             <label>検索<input name="q" placeholder="会社名/住所/URL" /></label>
             <label>業種<select name="category"><option value="">すべて</option></select></label>
             <label>業界<select name="industry"><option value="">すべて</option></select></label>
-            <label>並び替え
-              <select name="sort_by">
-                <option value="updated_at">更新日時</option>
-                <option value="address">住所</option>
-                <option value="category">業種</option>
-                <option value="industry">業界</option>
-                <option value="name">企業・団体名</option>
-                <option value="rating">評価</option>
-                <option value="user_ratings_total">評価件数</option>
-              </select>
-            </label>
-            <label>並び順
-              <select name="sort_dir">
-                <option value="asc">昇順</option>
-                <option value="desc" selected>降順</option>
-              </select>
-            </label>
             <button type="submit">再検索</button>
           </form>
           <div class="table-wrap">
@@ -98,12 +81,12 @@
               <thead>
                 <tr>
                   <th><input type="checkbox" id="select-all" /></th>
-                  <th>住所</th>
-                  <th>企業・団体名</th>
-                  <th>業種</th>
-                  <th>業界</th>
-                  <th>評価</th>
-                  <th>評価件数</th>
+                  <th class="sortable" data-sort="address">住所<span class="sort-indicator"></span></th>
+                  <th class="sortable" data-sort="name">企業・団体名<span class="sort-indicator"></span></th>
+                  <th class="sortable" data-sort="category">業種<span class="sort-indicator"></span></th>
+                  <th class="sortable" data-sort="industry">業界<span class="sort-indicator"></span></th>
+                  <th class="sortable" data-sort="rating">評価<span class="sort-indicator"></span></th>
+                  <th class="sortable" data-sort="user_ratings_total">評価件数<span class="sort-indicator"></span></th>
                   <th>Web</th>
                   <th>電話</th>
                   <th>メール</th>

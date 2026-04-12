@@ -389,6 +389,34 @@ td {
   font-weight: 700;
 }
 
+#lead-table thead th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+#lead-table thead th.sortable:hover {
+  background: linear-gradient(180deg, #eaf3ff, #e3eeff);
+}
+
+#lead-table .sort-indicator {
+  display: inline-block;
+  margin-left: 6px;
+  width: 12px;
+  color: #8ba0c2;
+}
+
+#lead-table thead th.sorted-asc .sort-indicator::before {
+  content: "▲";
+  font-size: 10px;
+  color: #2f5fa7;
+}
+
+#lead-table thead th.sorted-desc .sort-indicator::before {
+  content: "▼";
+  font-size: 10px;
+  color: #2f5fa7;
+}
+
 #lead-table tbody tr:nth-child(even) {
   background: #fbfdff;
 }
