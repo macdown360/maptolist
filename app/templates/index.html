@@ -155,6 +155,14 @@
       <section class="view" id="view-my-list">
         <div class="panel">
           <h3>マイリスト</h3>
+          <div class="status-tabs" id="my-list-status-tabs">
+            <button type="button" class="ghost status-tab active" data-status="">すべて</button>
+            <button type="button" class="ghost status-tab" data-status="new">未対応</button>
+            <button type="button" class="ghost status-tab" data-status="contacted">連絡済み</button>
+            <button type="button" class="ghost status-tab" data-status="nurturing">育成中</button>
+            <button type="button" class="ghost status-tab" data-status="closed">クローズ</button>
+            <button type="button" class="ghost status-tab" data-status="excluded">除外</button>
+          </div>
           <form id="my-list-filter-form" class="form-grid compact">
             <label>検索<input name="q" placeholder="会社名/住所/URL" /></label>
             <label>ステータス
@@ -165,9 +173,25 @@
             <label>優先度
               <select name="priority">
                 <option value="">すべて</option>
-                <option value="high">high</option>
-                <option value="medium">medium</option>
-                <option value="low">low</option>
+                <option value="high">高</option>
+                <option value="medium">中</option>
+                <option value="low">低</option>
+              </select>
+            </label>
+            <label>並び替え
+              <select name="sort_by">
+                <option value="updated_at">更新日時</option>
+                <option value="last_contacted_at">最終送信日時</option>
+                <option value="contact_count">送信回数</option>
+                <option value="priority">優先度</option>
+                <option value="name">会社名</option>
+                <option value="added_at">追加日時</option>
+              </select>
+            </label>
+            <label>並び順
+              <select name="sort_dir">
+                <option value="desc">降順</option>
+                <option value="asc">昇順</option>
               </select>
             </label>
             <button type="submit">再検索</button>
@@ -187,9 +211,9 @@
             <label>更新優先度
               <select name="priority">
                 <option value="">変更しない</option>
-                <option value="high">high</option>
-                <option value="medium">medium</option>
-                <option value="low">low</option>
+                <option value="high">高</option>
+                <option value="medium">中</option>
+                <option value="low">低</option>
               </select>
             </label>
             <label>メモ
@@ -232,8 +256,9 @@
           <h3>アプローチ履歴</h3>
           <form id="history-filter-form" class="form-grid compact">
             <label>企業名/件名/本文
-              <input name="q" placeholder="会社名や件名で検索" />
+              <input name="q" placeholder="会社名や件名で検索" list="lead-name-suggestions" />
             </label>
+            <datalist id="lead-name-suggestions"></datalist>
             <label>開始日
               <input name="from_date" type="date" />
             </label>
@@ -264,6 +289,13 @@
             </label>
             <button type="submit">再取得</button>
           </form>
+          <div class="history-presets">
+            <button type="button" class="ghost history-range-btn" data-range="today">今日</button>
+            <button type="button" class="ghost history-range-btn" data-range="7d">直近7日</button>
+            <button type="button" class="ghost history-range-btn" data-range="30d">直近30日</button>
+            <button type="button" class="ghost history-range-btn" data-range="clear">期間クリア</button>
+          </div>
+          <div id="history-summary" class="history-summary"></div>
           <p id="history-result" class="muted"></p>
           <div class="table-wrap">
             <table id="history-table">
@@ -271,15 +303,18 @@
                 <tr>
                   <th>日時</th>
                   <th>企業名</th>
+                  <th>送信先</th>
                   <th>チャネル</th>
                   <th>結果</th>
                   <th>件名</th>
                   <th>詳細</th>
+                  <th>操作</th>
                 </tr>
               </thead>
               <tbody></tbody>
             </table>
           </div>
+          <div id="history-timeline" class="simple-list"></div>
         </div>
       </section>
 
@@ -363,6 +398,7 @@
       </section>
     </main>
   </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="/static/app.js"></script>
 </body>
 </html>

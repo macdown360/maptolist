@@ -36,6 +36,15 @@ const placeTypeSelect = document.querySelector('#place-type-select');
 const placeTypeFilterInput = document.querySelector('#place-type-filter');
 const importQueryInput = document.querySelector('#import-form input[name="query"]');
 const myListStatusSelect = document.querySelector('#my-list-filter-form select[name="status"]');
+const myListPriorityFilterSelect = document.querySelector('#my-list-filter-form select[name="priority"]');
+const historyTimeline = document.querySelector('#history-timeline');
+const leadNameSuggestionList = document.querySelector('#lead-name-suggestions');
+const historyRangeButtons = document.querySelectorAll('.history-range-btn');
+const myListStatusTabs = document.querySelectorAll('.status-tab');
+const historySummary = document.querySelector('#history-summary');
+const toast = document.querySelector('#toast');
+
+const timelineMessageMap = new Map();
 
 const leadSelectAll = document.querySelector('#select-all');
 const myListSelectAll = document.querySelector('#my-list-select-all');
@@ -49,6 +58,51 @@ const myListDefaultPriority = document.querySelector('#my-list-default-priority'
 let currentItems = [];
 let myListItems = [];
 let placeTypeItems = [];
+
+const STATUS_LABELS = {
+  new: '未対応',
+  contacted: '連絡済み',
+  nurturing: '育成中',
+  closed: 'クローズ',
+  excluded: '除外',
+};
+
+const PRIORITY_LABELS = {
+  high: '高',
+  medium: '中',
+  low: '低',
+};
+
+const CHANNEL_LABELS = {
+  email: 'メール',
+  form: 'フォーム',
+};
+
+const LOG_STATUS_LABELS = {
+  sent: '送信済み',
+  dry_run: 'ドライラン',
+  skipped: 'スキップ',
+  failed: '失敗',
+  suppressed: '配信停止',
+  daily_limit: '日次上限',
+  no_adapter: 'アダプタなし',
+};
+
+function toStatusLabel(value) {
+  return STATUS_LABELS[value] || value || '';
+}
+
+function toPriorityLabel(value) {
+  return PRIORITY_LABELS[value] || value || '';
+}
+
+function toChannelLabel(value) {
+  return CHANNEL_LABELS[value] || value || '';
+}
+
+function toLogStatusLabel(value) {
+  return LOG_STATUS_LABELS[value] || value || '';
+}
 
 async function apiFetch(url, options = {}) {
   const res = await fetch(url, options);
@@ -79,6 +133,16 @@ function addActivity(text, who = 'system') {
   el.className = `chat-item ${who}`;
   el.textContent = `[${new Date().toLocaleTimeString('ja-JP')}] ${text}`;
   activityFeed.prepend(el);
+}
+
+function showToast(message, kind = 'info') {
+  if (!toast) return;
+  toast.textContent = message;
+  toast.className = `toast show ${kind}`;
+  window.clearTimeout(showToast.timerId);
+  showToast.timerId = window.setTimeout(() => {
+    toast.className = 'toast';
+  }, 2200);
 }
 
 function switchView(viewName) {
@@ -150,8 +214,8 @@ function renderMyListTable(items) {
         <td>${escapeHtml(item.name)}</td>
         <td>${escapeHtml(item.effective_category)}</td>
         <td>${escapeHtml(item.effective_industry)}</td>
-        <td>${escapeHtml(item.status)}</td>
-        <td>${escapeHtml(item.priority)}</td>
+        <td><span class="status-badge status-${escapeHtml(item.status)}">${escapeHtml(toStatusLabel(item.status))}</span></td>
+        <td><span class="priority-badge priority-${escapeHtml(item.priority)}">${escapeHtml(toPriorityLabel(item.priority))}</span></td>
         <td>${escapeHtml(item.last_contacted_at || '')}</td>
         <td>${Number(item.contact_count || 0)}</td>
         <td>${escapeHtml(item.email)}</td>
@@ -163,20 +227,183 @@ function renderMyListTable(items) {
 }
 
 function renderHistoryTable(items) {
+  const keyword = String(historyFilterForm?.querySelector('input[name="q"]')?.value || '').trim();
   historyTbody.innerHTML = items
     .map(
       (item) => `
       <tr>
         <td>${escapeHtml(item.created_at)}</td>
-        <td>${escapeHtml(item.lead_name)}</td>
-        <td>${escapeHtml(item.channel)}</td>
-        <td>${escapeHtml(item.status)}</td>
-        <td>${escapeHtml(item.subject)}</td>
-        <td>${escapeHtml(item.message || '').slice(0, 120)}</td>
+        <td>${highlightText(item.lead_name, keyword)}</td>
+        <td>${escapeHtml(item.lead_email || '')}</td>
+        <td>${escapeHtml(toChannelLabel(item.channel))}</td>
+        <td>${escapeHtml(toLogStatusLabel(item.status))}</td>
+        <td>${highlightText(item.subject || '', keyword)}</td>
+        <td>${highlightText((item.message || '').slice(0, 120), keyword)}</td>
+        <td><button type="button" class="ghost show-timeline-btn" data-lead-id="${item.lead_id}" data-lead-name="${escapeHtml(item.lead_name)}">詳細</button></td>
       </tr>
     `,
     )
     .join('');
+}
+
+function highlightText(text, keyword) {
+  const source = String(text || '');
+  const key = String(keyword || '').trim();
+  if (!key) return escapeHtml(source);
+
+  const escapedKeyword = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(${escapedKeyword})`, 'ig');
+  const parts = source.split(re);
+  return parts
+    .map((part) => {
+      if (!part) return '';
+      if (part.toLowerCase() === key.toLowerCase()) {
+        return `<mark>${escapeHtml(part)}</mark>`;
+      }
+      return escapeHtml(part);
+    })
+    .join('');
+}
+
+function renderTimeline(leadName, items) {
+  if (!historyTimeline) return;
+  const keyword = String(historyFilterForm?.querySelector('input[name="q"]')?.value || '').trim();
+  timelineMessageMap.clear();
+  if (!items.length) {
+    historyTimeline.innerHTML = `<div class="row">${escapeHtml(leadName)} の履歴はありません。</div>`;
+    return;
+  }
+  historyTimeline.innerHTML = items
+    .map(
+      (x) => {
+        timelineMessageMap.set(String(x.id), String(x.message || ''));
+        return `<div class="row timeline-row">
+          <div>${escapeHtml(x.created_at)} | ${escapeHtml(toChannelLabel(x.channel))} | ${escapeHtml(toLogStatusLabel(x.status))} | ${highlightText(x.subject || '', keyword)}</div>
+          <details class="timeline-message">
+            <summary>本文を表示</summary>
+            <pre>${highlightText(x.message || '', keyword)}</pre>
+            <button type="button" class="ghost copy-message-btn" data-log-id="${x.id}">本文をコピー</button>
+          </details>
+        </div>`;
+      },
+    )
+    .join('');
+}
+
+function renderHistorySummary(items) {
+  if (!historySummary) return;
+  const total = items.length;
+  const statusCounts = {};
+  const channelCounts = {};
+  for (const item of items) {
+    const key = String(item.status || 'unknown');
+    statusCounts[key] = (statusCounts[key] || 0) + 1;
+    const channel = String(item.channel || 'unknown');
+    channelCounts[channel] = (channelCounts[channel] || 0) + 1;
+  }
+
+  const statusBadges = Object.entries(statusCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([status, count]) => `<span class="summary-badge">${escapeHtml(toLogStatusLabel(status))}: ${count}</span>`)
+    .join('');
+
+  const channelBadges = Object.entries(channelCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([channel, count]) => `<span class="summary-badge channel">${escapeHtml(toChannelLabel(channel))}: ${count}</span>`)
+    .join('');
+
+  historySummary.innerHTML = `<span class="summary-total">合計 ${total} 件</span>${statusBadges}${channelBadges}`;
+}
+
+function persistMyListFilterToUrl(formParams) {
+  const url = new URL(window.location.href);
+  const mapping = {
+    q: 'ml_q',
+    status: 'ml_status',
+    priority: 'ml_priority',
+    sort_by: 'ml_sort_by',
+    sort_dir: 'ml_sort_dir',
+  };
+
+  Object.entries(mapping).forEach(([formKey, queryKey]) => {
+    const value = String(formParams.get(formKey) || '').trim();
+    if (value) {
+      url.searchParams.set(queryKey, value);
+    } else {
+      url.searchParams.delete(queryKey);
+    }
+  });
+
+  const query = url.searchParams.toString();
+  const nextUrl = query ? `${url.pathname}?${query}` : url.pathname;
+  window.history.replaceState({}, '', nextUrl);
+}
+
+function hydrateMyListFilterFromUrl() {
+  if (!myListFilterForm) return;
+  const params = new URLSearchParams(window.location.search);
+  const mapping = {
+    ml_q: 'q',
+    ml_status: 'status',
+    ml_priority: 'priority',
+    ml_sort_by: 'sort_by',
+    ml_sort_dir: 'sort_dir',
+  };
+
+  Object.entries(mapping).forEach(([queryKey, formKey]) => {
+    const value = params.get(queryKey);
+    if (value === null) return;
+    const field = myListFilterForm.querySelector(`[name="${formKey}"]`);
+    if (field) {
+      field.value = value;
+    }
+  });
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  document.body.removeChild(textarea);
+}
+
+function formatDateInput(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+async function applyHistoryRange(range) {
+  const fromInput = historyFilterForm?.querySelector('input[name="from_date"]');
+  const toInput = historyFilterForm?.querySelector('input[name="to_date"]');
+  if (!fromInput || !toInput) return;
+
+  const today = new Date();
+  const to = formatDateInput(today);
+
+  if (range === 'today') {
+    fromInput.value = to;
+    toInput.value = to;
+  } else if (range === '7d' || range === '30d') {
+    const days = range === '7d' ? 6 : 29;
+    const from = new Date(today);
+    from.setDate(today.getDate() - days);
+    fromInput.value = formatDateInput(from);
+    toInput.value = to;
+  } else {
+    fromInput.value = '';
+    toInput.value = '';
+  }
+
+  await fetchContactLogs();
 }
 
 function getSelectedLeadIds() {
@@ -206,6 +433,7 @@ async function fetchLeads() {
 
 async function fetchMyList() {
   const params = new URLSearchParams(new FormData(myListFilterForm));
+  persistMyListFilterToUrl(params);
   const res = await apiFetch(`/api/my-list?${params.toString()}`);
   if (!res) return;
   const data = await res.json();
@@ -217,7 +445,23 @@ async function fetchMyList() {
   myListItems = data.items || [];
   renderMyListTable(myListItems);
   renderOptions(myListStatusSelect, data.filters.statuses || [], myListFilterForm.status.value);
+  renderOptions(myListPriorityFilterSelect, data.filters.priorities || [], myListFilterForm.priority.value);
   myListResult.textContent = `${myListItems.length}件`;
+
+  const selectedStatus = String(myListFilterForm.status.value || '');
+  myListStatusTabs.forEach((tab) => {
+    tab.classList.toggle('active', tab.dataset.status === selectedStatus);
+  });
+}
+
+async function fetchLeadNameSuggestions() {
+  const res = await apiFetch('/api/leads/names?limit=500');
+  if (!res) return;
+  const data = await res.json();
+  if (!res.ok || !leadNameSuggestionList) return;
+  leadNameSuggestionList.innerHTML = (data.items || [])
+    .map((name) => `<option value="${escapeHtml(name)}"></option>`)
+    .join('');
 }
 
 async function fetchContactLogs() {
@@ -232,6 +476,7 @@ async function fetchContactLogs() {
 
   const items = data.items || [];
   renderHistoryTable(items);
+  renderHistorySummary(items);
   historyResult.textContent = `${items.length}件表示中`;
 }
 
@@ -521,6 +766,60 @@ historyFilterForm?.addEventListener('submit', async (e) => {
   await fetchContactLogs();
 });
 
+historyRangeButtons.forEach((btn) => {
+  btn.addEventListener('click', async () => {
+    const range = btn.dataset.range || 'clear';
+    await applyHistoryRange(range);
+  });
+});
+
+myListStatusTabs.forEach((tab) => {
+  tab.addEventListener('click', async () => {
+    const status = tab.dataset.status || '';
+    if (!myListFilterForm) return;
+    const statusInput = myListFilterForm.querySelector('select[name="status"]');
+    if (!statusInput) return;
+    statusInput.value = status;
+    await fetchMyList();
+  });
+});
+
+historyTbody?.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.show-timeline-btn');
+  if (!btn) return;
+  const leadId = Number(btn.dataset.leadId || 0);
+  const leadName = String(btn.dataset.leadName || '企業');
+  if (!leadId) return;
+
+  const res = await apiFetch(`/api/leads/${leadId}/timeline?limit=50`);
+  if (!res) return;
+  const data = await res.json();
+  if (!res.ok) {
+    if (historyTimeline) historyTimeline.innerHTML = `<div class="row">エラー: ${escapeHtml(data.detail || '取得失敗')}</div>`;
+    return;
+  }
+  renderTimeline(leadName, data.items || []);
+});
+
+historyTimeline?.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.copy-message-btn');
+  if (!btn) return;
+  const logId = String(btn.dataset.logId || '');
+  const message = timelineMessageMap.get(logId) || '';
+  if (!message) {
+    addActivity('コピー対象の本文が見つかりませんでした。', 'system');
+    return;
+  }
+  try {
+    await copyTextToClipboard(message);
+    addActivity('本文をクリップボードにコピーしました。', 'user');
+    showToast('本文をコピーしました', 'success');
+  } catch (err) {
+    addActivity(`コピーに失敗しました: ${String(err)}`, 'system');
+    showToast('コピーに失敗しました', 'error');
+  }
+});
+
 addToMyListBtn?.addEventListener('click', addSelectedToMyList);
 myListUpdateForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -708,10 +1007,12 @@ myListSelectAll?.addEventListener('change', (e) => {
   });
 });
 
+hydrateMyListFilterFromUrl();
 loadUserBadge();
 addActivity('ワークスペースを初期化しました。左メニューから操作を選択してください。', 'system');
 fetchLeads();
 fetchMyList();
 fetchContactLogs();
+fetchLeadNameSuggestions();
 fetchGoogleKeyStatus();
 fetchPlaceTypes();

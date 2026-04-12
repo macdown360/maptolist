@@ -889,6 +889,23 @@ def get_leads(
     }
 
 
+@app.get("/api/leads/names")
+def get_lead_names(user: CurrentUser, limit: int = Query(300, ge=1, le=2000)) -> dict[str, Any]:
+    init_db()
+    with sqlite3.connect(DB_PATH) as conn:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT name
+            FROM leads
+            WHERE user_id = ? AND name <> ''
+            ORDER BY updated_at DESC
+            LIMIT ?
+            """,
+            (user["id"], limit),
+        ).fetchall()
+    return {"items": [r[0] for r in rows]}
+
+
 @app.post("/api/import/google-places")
 async def import_google_places(payload: ImportRequest, user: CurrentUser) -> dict[str, Any]:
     init_db()
@@ -1492,6 +1509,8 @@ def get_my_list(
     q: str = Query("", description="会社名や住所で検索"),
     status: str = Query("", description="マイリスト状態フィルタ"),
     priority: str = Query("", description="優先度フィルタ"),
+    sort_by: str = Query("updated_at", description="並び替え項目"),
+    sort_dir: str = Query("desc", description="並び順 asc/desc"),
 ) -> dict[str, Any]:
     init_db()
 
@@ -1533,7 +1552,34 @@ def get_my_list(
         sql += " AND m.priority = ?"
         params.append(priority)
 
-    sql += " ORDER BY m.updated_at DESC"
+    allowed_sort_columns = {
+        "updated_at": "m.updated_at",
+        "added_at": "m.added_at",
+        "last_contacted_at": "m.last_contacted_at",
+        "contact_count": "m.contact_count",
+        "name": "l.name",
+    }
+
+    normalized_dir = sort_dir.strip().lower()
+    if normalized_dir not in {"asc", "desc"}:
+        raise HTTPException(status_code=400, detail="sort_dir は asc または desc を指定してください")
+
+    normalized_sort_by = sort_by.strip().lower()
+    if normalized_sort_by == "priority":
+        sql += (
+            " ORDER BY "
+            "CASE m.priority "
+            "WHEN 'high' THEN 1 "
+            "WHEN 'medium' THEN 2 "
+            "WHEN 'low' THEN 3 "
+            "ELSE 99 END "
+            f"{normalized_dir}, m.updated_at DESC"
+        )
+    else:
+        sort_column = allowed_sort_columns.get(normalized_sort_by)
+        if not sort_column:
+            raise HTTPException(status_code=400, detail="未対応の sort_by です")
+        sql += f" ORDER BY {sort_column} {normalized_dir}, m.updated_at DESC"
 
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
@@ -1553,6 +1599,10 @@ def get_my_list(
         "filters": {
             "statuses": [r[0] for r in statuses],
             "priorities": [r[0] for r in priorities],
+        },
+        "sort": {
+            "sort_by": normalized_sort_by,
+            "sort_dir": normalized_dir,
         },
     }
 
