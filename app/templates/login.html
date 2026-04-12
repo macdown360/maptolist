@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoSales — ログイン</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Noto Sans JP', sans-serif;
+      background: #f5f7fb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .login-card {
+      background: #ffffff;
+      border: 1px solid #dde5f3;
+      border-radius: 20px;
+      padding: 52px 44px 44px;
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(100, 140, 220, 0.12);
+    }
+    .brand-icon {
+      font-size: 40px;
+      margin-bottom: 12px;
+    }
+    .brand-title {
+      font-size: 26px;
+      font-weight: 700;
+      color: #1a2a4a;
+      margin-bottom: 4px;
+    }
+    .brand-sub {
+      font-size: 14px;
+      color: #6a7ea8;
+      margin-bottom: 36px;
+    }
+    .feature-list {
+      text-align: left;
+      list-style: none;
+      margin-bottom: 36px;
+    }
+    .feature-list li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: #3a4a6a;
+      padding: 6px 0;
+      border-bottom: 1px solid #eef2fb;
+    }
+    .feature-list li:last-child { border-bottom: 0; }
+    .feature-icon { font-size: 18px; flex-shrink: 0; }
+    .google-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      width: 100%;
+      padding: 14px 20px;
+      background: #ffffff;
+      border: 2px solid #dde5f3;
+      border-radius: 12px;
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 600;
+      color: #2c3e6a;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .google-btn:hover {
+      background: #f0f5ff;
+      border-color: #7ea9e1;
+      box-shadow: 0 4px 14px rgba(100, 150, 220, 0.25);
+      transform: translateY(-1px);
+    }
+    .google-btn:active { transform: translateY(0); }
+    .google-logo {
+      width: 22px;
+      height: 22px;
+    }
+    .footer-note {
+      margin-top: 24px;
+      font-size: 12px;
+      color: #9aa8c0;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="brand-icon">📊</div>
+    <p class="brand-title">AutoSales</p>
+    <p class="brand-sub">営業リード自動収集・連絡システム</p>
+
+    <ul class="feature-list">
+      <li><span class="feature-icon">🗺️</span>Google マップから企業情報を自動取得</li>
+      <li><span class="feature-icon">✉️</span>Googleアカウントのメールで直接送信</li>
+      <li><span class="feature-icon">📋</span>配信停止・監査ログ・送信上限管理</li>
+    </ul>
+
+    <a href="/auth/login" class="google-btn">
+      <svg class="google-logo" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+        <path fill="none" d="M0 0h48v48H0z"/>
+      </svg>
+      Googleアカウントでログイン
+    </a>
+
+    <p class="footer-note">
+      ログインすることで、メール送信のためのGmail権限を<br />
+      このアプリに許可します。
+    </p>
+  </div>
+</body>
+</html>

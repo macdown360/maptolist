@@ -27,6 +27,34 @@ const selectAll = document.querySelector('#select-all');
 
 let currentItems = [];
 
+// 401が返ったらログインページへ
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, options);
+  if (res.status === 401) {
+    window.location.href = '/';
+    return null;
+  }
+  return res;
+}
+
+// Gmail接続状態バッジ表示
+async function loadUserBadge() {
+  const res = await apiFetch('/api/auth/me');
+  if (!res) return;
+  const data = await res.json();
+  const badge = document.querySelector('#gmail-badge');
+  if (!badge) return;
+  if (data.gmail_connected) {
+    badge.textContent = '✉ Gmail 接続済み';
+    badge.className = 'gmail-badge connected';
+  } else {
+    badge.textContent = '⚠ Gmail 未接続';
+    badge.className = 'gmail-badge disconnected';
+  }
+}
+
+loadUserBadge();
+
 function addActivity(text, who = 'system') {
   const el = document.createElement('div');
   el.className = `chat-item ${who}`;
@@ -105,7 +133,8 @@ function getSelectedLeadIds() {
 
 async function fetchLeads() {
   const params = new URLSearchParams(new FormData(filterForm));
-  const res = await fetch(`/api/leads?${params.toString()}`);
+  const res = await apiFetch(`/api/leads?${params.toString()}`);
+  if (!res) return;
   const data = await res.json();
 
   currentItems = data.items;
@@ -116,7 +145,8 @@ async function fetchLeads() {
 }
 
 async function fetchSuppressions() {
-  const res = await fetch('/api/suppressions');
+  const res = await apiFetch('/api/suppressions');
+  if (!res) return;
   const data = await res.json();
   suppressionList.innerHTML = (data.items || [])
     .map((x) => `<div class="row">${escapeHtml(x.email)} | ${escapeHtml(x.reason)} | ${escapeHtml(x.created_at)}</div>`)
@@ -124,7 +154,8 @@ async function fetchSuppressions() {
 }
 
 async function fetchAdapters() {
-  const res = await fetch('/api/form-adapters');
+  const res = await apiFetch('/api/form-adapters');
+  if (!res) return;
   const data = await res.json();
   adapterList.innerHTML = (data.items || [])
     .map((x) => `<div class="row">${escapeHtml(x.domain)} ${escapeHtml(x.path)} | ${escapeHtml(x.name)} | enabled=${x.enabled}</div>`)
@@ -132,7 +163,8 @@ async function fetchAdapters() {
 }
 
 async function fetchAuditLogs() {
-  const res = await fetch('/api/audit-logs?limit=100');
+  const res = await apiFetch('/api/audit-logs?limit=100');
+  if (!res) return;
   const data = await res.json();
   auditList.innerHTML = (data.items || [])
     .map((x) => `<div class="row">${escapeHtml(x.created_at)} | ${escapeHtml(x.action)} | ${escapeHtml(x.target_type)}:${escapeHtml(x.target_id || '')}</div>`)
@@ -140,7 +172,8 @@ async function fetchAuditLogs() {
 }
 
 async function fetchGoogleKeyStatus() {
-  const res = await fetch('/api/settings/google-maps-key');
+  const res = await apiFetch('/api/settings/google-maps-key');
+  if (!res) return;
   const data = await res.json();
   if (!res.ok) {
     googleKeyStatus.textContent = `状態取得エラー: ${data.detail || 'unknown'}`;
@@ -159,7 +192,7 @@ importForm.addEventListener('submit', async (e) => {
   const payload = Object.fromEntries(new FormData(importForm).entries());
   payload.max_results = Number(payload.max_results || 20);
 
-  const res = await fetch('/api/import/google-places', {
+  const res = await apiFetch('/api/import/google-places', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -201,7 +234,7 @@ contactForm.addEventListener('submit', async (e) => {
     body: formData.get('body'),
   };
 
-  const res = await fetch(endpoint, {
+  const res = await apiFetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -214,7 +247,8 @@ contactForm.addEventListener('submit', async (e) => {
     return;
   }
 
-  contactResult.textContent = `sent=${data.sent}, skipped=${data.skipped}, limited=${data.limited}, dry_run=${data.dry_run}`;
+  const via = data.via === 'gmail' ? 'Gmail送信' : data.via === 'dry_run' ? 'ドライラン(未送信)' : 'SMTP送信';
+  contactResult.textContent = `送信: ${data.sent}件 スキップ: ${data.skipped}件 制限: ${data.limited}件 [${via}]`;
   addActivity(`${channel}送信: sent=${data.sent}, skipped=${data.skipped}`, 'user');
   await fetchLeads();
 });
@@ -235,7 +269,7 @@ tagForm.addEventListener('submit', async (e) => {
     note: formData.get('note') || '',
   };
 
-  const res = await fetch('/api/leads/tags/bulk', {
+  const res = await apiFetch('/api/leads/tags/bulk', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -260,7 +294,7 @@ suppressionForm.addEventListener('submit', async (e) => {
     reason: formData.get('reason') || 'user_request',
   };
 
-  const res = await fetch('/api/suppressions', {
+  const res = await apiFetch('/api/suppressions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -297,7 +331,7 @@ adapterForm.addEventListener('submit', async (e) => {
     enabled: true,
   };
 
-  const res = await fetch('/api/form-adapters', {
+  const res = await apiFetch('/api/form-adapters', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -319,7 +353,7 @@ googleKeyForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const formData = new FormData(googleKeyForm);
   const payload = { api_key: formData.get('api_key') };
-  const res = await fetch('/api/settings/google-maps-key', {
+  const res = await apiFetch('/api/settings/google-maps-key', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

@@ -1,29 +1,36 @@
+import base64
 import json
 import os
 import re
+import secrets
 import sqlite3
 from contextlib import closing
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from email.mime.text import MIMEText
 from pathlib import Path
+from typing import Annotated, Any
 from urllib.parse import urlparse
 import smtplib
-from typing import Any
 
 import httpx
-from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse
+from authlib.integrations.starlette_client import OAuth
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
+from starlette.middleware.sessions import SessionMiddleware
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = BASE_DIR / "autosales.db"
 load_dotenv(BASE_DIR / ".env")
-GOOGLE_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")
 EMAIL_REGEX = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 DEFAULT_DAILY_SEND_LIMIT = int(os.getenv("DAILY_SEND_LIMIT", "100"))
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
+SESSION_SECRET = os.getenv("SESSION_SECRET", secrets.token_hex(32))
 
 CLASSIFY_KEYWORDS: dict[str, dict[str, list[str]]] = {
     "行政書士": {
@@ -40,9 +47,23 @@ CLASSIFY_KEYWORDS: dict[str, dict[str, list[str]]] = {
     },
 }
 
-app = FastAPI(title="AutoSales Lead Collector", version="0.2.0")
+app = FastAPI(title="AutoSales Lead Collector", version="0.3.0")
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, max_age=86400 * 30, https_only=False)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "app" / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
+
+oauth = OAuth()
+oauth.register(
+    name="google",
+    client_id=GOOGLE_CLIENT_ID,
+    client_secret=GOOGLE_CLIENT_SECRET,
+    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+    client_kwargs={
+        "scope": "openid email profile https://www.googleapis.com/auth/gmail.send",
+        "access_type": "offline",
+        "prompt": "consent",
+    },
+)
 
 
 class ImportRequest(BaseModel):
@@ -192,6 +213,24 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                google_id TEXT UNIQUE NOT NULL,
+                email TEXT NOT NULL,
+                name TEXT,
+                picture TEXT,
+                maps_api_key TEXT DEFAULT '',
+                gmail_access_token TEXT DEFAULT '',
+                gmail_refresh_token TEXT DEFAULT '',
+                gmail_token_expiry TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        safe_add_column(conn, "leads", "user_id INTEGER")
 
 
 def now_iso() -> str:
@@ -206,7 +245,9 @@ def safe_add_column(conn: sqlite3.Connection, table: str, column_def: str) -> No
             raise
 
 
-def get_google_api_key() -> str:
+def get_google_api_key(user: dict[str, Any] | None = None) -> str:
+    if user and user.get("maps_api_key"):
+        return str(user["maps_api_key"]).strip()
     return os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
 
 
@@ -231,6 +272,126 @@ def set_env_key(key: str, value: str) -> None:
     env_path.write_text("\n".join(out).strip() + "\n", encoding="utf-8")
     os.environ[key] = value
 
+
+# ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
+
+def get_current_user(request: Request) -> dict[str, Any] | None:
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return None
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def require_user(request: Request) -> dict[str, Any]:
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="ログインが必要です")
+    return user
+
+
+# FastAPI dependency alias
+CurrentUser = Annotated[dict[str, Any], Depends(require_user)]
+
+
+def upsert_user(
+    google_id: str,
+    email: str,
+    name: str,
+    picture: str,
+    access_token: str,
+    refresh_token: str,
+    token_expiry: str,
+) -> dict[str, Any]:
+    now = now_iso()
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        conn.execute(
+            """
+            INSERT INTO users (google_id, email, name, picture, gmail_access_token, gmail_refresh_token, gmail_token_expiry, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(google_id) DO UPDATE SET
+                email=excluded.email,
+                name=excluded.name,
+                picture=excluded.picture,
+                gmail_access_token=CASE WHEN excluded.gmail_access_token <> '' THEN excluded.gmail_access_token ELSE users.gmail_access_token END,
+                gmail_refresh_token=CASE WHEN excluded.gmail_refresh_token <> '' THEN excluded.gmail_refresh_token ELSE users.gmail_refresh_token END,
+                gmail_token_expiry=CASE WHEN excluded.gmail_token_expiry <> '' THEN excluded.gmail_token_expiry ELSE users.gmail_token_expiry END,
+                updated_at=excluded.updated_at
+            """,
+            (google_id, email, name, picture, access_token, refresh_token, token_expiry, now, now),
+        )
+        row = conn.execute("SELECT * FROM users WHERE google_id = ?", (google_id,)).fetchone()
+    return dict(row)
+
+
+async def _refresh_gmail_token(refresh_token: str, user_id: int) -> str:
+    """Refresh Gmail access token and persist new token to DB."""
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    new_token = data.get("access_token", "")
+    expires_in = int(data.get("expires_in", 3600))
+    new_expiry = (datetime.now(UTC) + timedelta(seconds=expires_in)).isoformat()
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            "UPDATE users SET gmail_access_token=?, gmail_token_expiry=?, updated_at=? WHERE id=?",
+            (new_token, new_expiry, now_iso(), user_id),
+        )
+    return new_token
+
+
+async def send_via_gmail_api(user: dict[str, Any], to_email: str, subject: str, body: str) -> None:
+    """Send an email via Gmail API using the user's OAuth2 token."""
+    access_token = user.get("gmail_access_token", "")
+    refresh_token = user.get("gmail_refresh_token", "")
+    user_id = int(user["id"])
+
+    expiry_str = user.get("gmail_token_expiry", "")
+    if expiry_str:
+        try:
+            expiry = datetime.fromisoformat(expiry_str)
+            if datetime.now(UTC) >= expiry - timedelta(minutes=5):
+                access_token = await _refresh_gmail_token(refresh_token, user_id)
+        except (ValueError, TypeError):
+            pass
+
+    if not access_token:
+        raise ValueError("Gmailアクセストークンがありません。再ログインしてください。")
+
+    msg = MIMEText(body, "plain", "utf-8")
+    msg["To"] = to_email
+    msg["From"] = user["email"]
+    msg["Subject"] = subject
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.post(
+            "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"raw": raw},
+        )
+        if resp.status_code == 401 and refresh_token:
+            access_token = await _refresh_gmail_token(refresh_token, user_id)
+            resp = await client.post(
+                "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+                headers={"Authorization": f"Bearer {access_token}"},
+                json={"raw": raw},
+            )
+        resp.raise_for_status()
 
 def normalize_domain(website: str) -> str:
     if not website:
@@ -290,11 +451,66 @@ def log_audit(action: str, target_type: str, target_id: str, details: dict[str, 
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("index.html", {"request": request})
+    user = get_current_user(request)
+    if not user:
+        return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse("index.html", {"request": request, "user": user})
+
+
+@app.get("/auth/login")
+async def auth_login(request: Request) -> RedirectResponse:
+    redirect_uri = f"{APP_BASE_URL}/auth/callback"
+    return await oauth.google.authorize_redirect(request, redirect_uri)
+
+
+@app.get("/auth/callback")
+async def auth_callback(request: Request) -> RedirectResponse:
+    try:
+        token = await oauth.google.authorize_access_token(request)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"OAuth認証エラー: {exc}") from exc
+
+    user_info = token.get("userinfo") or {}
+    google_id = user_info.get("sub", "")
+    email = user_info.get("email", "")
+    name = user_info.get("name", "")
+    picture = user_info.get("picture", "")
+
+    if not google_id or not email:
+        raise HTTPException(status_code=400, detail="Googleアカウント情報の取得に失敗しました")
+
+    access_token = token.get("access_token", "")
+    refresh_token = token.get("refresh_token", "")
+    expires_in = int(token.get("expires_in", 3600))
+    token_expiry = (datetime.now(UTC) + timedelta(seconds=expires_in)).isoformat()
+
+    init_db()
+    user = upsert_user(google_id, email, name, picture, access_token, refresh_token, token_expiry)
+    request.session["user_id"] = user["id"]
+    log_audit("login", "user", str(user["id"]), {"email": email})
+    return RedirectResponse("/")
+
+
+@app.get("/auth/logout")
+def auth_logout(request: Request) -> RedirectResponse:
+    request.session.clear()
+    return RedirectResponse("/")
+
+
+@app.get("/api/auth/me")
+def auth_me(user: CurrentUser) -> dict[str, Any]:
+    return {
+        "id": user["id"],
+        "email": user["email"],
+        "name": user["name"],
+        "picture": user["picture"],
+        "gmail_connected": bool(user.get("gmail_refresh_token") or user.get("gmail_access_token")),
+        "maps_key_configured": bool(user.get("maps_api_key")),
+    }
 
 
 @app.get("/api/settings/google-maps-key")
-def get_google_maps_key_status() -> dict[str, Any]:
+def get_google_maps_key_status(user: CurrentUser) -> dict[str, Any]:
     init_db()
     key = get_google_api_key()
     if not key:
@@ -306,18 +522,23 @@ def get_google_maps_key_status() -> dict[str, Any]:
 
 
 @app.post("/api/settings/google-maps-key")
-def set_google_maps_key(payload: GoogleMapsKeyRequest) -> dict[str, Any]:
+def set_google_maps_key(payload: GoogleMapsKeyRequest, user: CurrentUser) -> dict[str, Any]:
     init_db()
     key = payload.api_key.strip()
     if not key:
         raise HTTPException(status_code=400, detail="APIキーが空です")
-    set_env_key("GOOGLE_MAPS_API_KEY", key)
-    log_audit("update_setting", "setting", "google_maps_api_key", {"configured": True})
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            "UPDATE users SET maps_api_key=?, updated_at=? WHERE id=?",
+            (key, now_iso(), user["id"]),
+        )
+    log_audit("update_setting", "setting", "google_maps_api_key", {"configured": True}, actor=user["email"])
     return {"ok": True}
 
 
 @app.get("/api/leads")
 def get_leads(
+    user: CurrentUser,
     q: str = Query("", description="会社名や住所で検索"),
     category: str = Query("", description="業種フィルタ"),
     industry: str = Query("", description="業界フィルタ"),
@@ -334,9 +555,9 @@ def get_leads(
             COALESCE(mt.industry, l.industry) AS effective_industry
         FROM leads l
         LEFT JOIN manual_tags mt ON mt.lead_id = l.id
-        WHERE 1=1
+        WHERE l.user_id = ?
     """
-    params: list[str] = []
+    params: list[Any] = [user["id"]]
 
     if q:
         sql += " AND (l.name LIKE ? OR l.address LIKE ? OR l.website LIKE ?)"
@@ -359,19 +580,19 @@ def get_leads(
             SELECT DISTINCT COALESCE(mt.category, l.category) AS c
             FROM leads l
             LEFT JOIN manual_tags mt ON mt.lead_id = l.id
-            WHERE COALESCE(mt.category, l.category) <> ''
+            WHERE COALESCE(mt.category, l.category) <> '' AND l.user_id = ?
             ORDER BY c
             """
-        ).fetchall()
+        , (user["id"],)).fetchall()
         industries = conn.execute(
             """
             SELECT DISTINCT COALESCE(mt.industry, l.industry) AS i
             FROM leads l
             LEFT JOIN manual_tags mt ON mt.lead_id = l.id
-            WHERE COALESCE(mt.industry, l.industry) <> ''
+            WHERE COALESCE(mt.industry, l.industry) <> '' AND l.user_id = ?
             ORDER BY i
             """
-        ).fetchall()
+        , (user["id"],)).fetchall()
 
     items: list[dict[str, Any]] = []
     for row in rows:
@@ -394,11 +615,11 @@ def get_leads(
 
 
 @app.post("/api/import/google-places")
-async def import_google_places(payload: ImportRequest) -> dict[str, Any]:
+async def import_google_places(payload: ImportRequest, user: CurrentUser) -> dict[str, Any]:
     init_db()
-    api_key = get_google_api_key()
+    api_key = get_google_api_key(user)
     if not api_key:
-        raise HTTPException(status_code=400, detail="GOOGLE_MAPS_API_KEY が未設定です")
+        raise HTTPException(status_code=400, detail="Google Maps APIキーが未設定です。設定画面で登録してください。")
 
     query = payload.query.strip()
     if payload.region.strip():
@@ -407,15 +628,15 @@ async def import_google_places(payload: ImportRequest) -> dict[str, Any]:
     items = await fetch_places(query=query, language=payload.language, max_results=payload.max_results, api_key=api_key)
     saved = 0
     for item in items:
-        upsert_lead(item)
+        upsert_lead(item, user_id=user["id"])
         saved += 1
 
-    log_audit("import_google_places", "lead", "bulk", {"query": query, "saved": saved})
+    log_audit("import_google_places", "lead", "bulk", {"query": query, "saved": saved}, actor=user["email"])
     return {"imported": saved, "total_fetched": len(items)}
 
 
 @app.post("/api/contact/email")
-def send_email(payload: ContactRequest) -> dict[str, Any]:
+async def send_email(payload: ContactRequest, user: CurrentUser) -> dict[str, Any]:
     init_db()
     if not payload.lead_ids:
         raise HTTPException(status_code=400, detail="対象企業を選択してください")
@@ -427,23 +648,27 @@ def send_email(payload: ContactRequest) -> dict[str, Any]:
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            f"SELECT * FROM leads WHERE id IN ({','.join(['?'] * len(payload.lead_ids))})",
-            payload.lead_ids,
+            f"SELECT * FROM leads WHERE id IN ({','.join(['?'] * len(payload.lead_ids))}) AND user_id = ?",
+            [*payload.lead_ids, user["id"]],
         ).fetchall()
 
     if not rows:
         raise HTTPException(status_code=404, detail="対象企業が見つかりません")
 
-    dry_run = os.getenv("EMAIL_DRY_RUN", "true").lower() == "true"
+    # Gmailトークンがあればそちらを優先
+    use_gmail = bool(user.get("gmail_refresh_token") or user.get("gmail_access_token"))
+    # SMTPフォールバック
     smtp_host = os.getenv("SMTP_HOST", "")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
     smtp_user = os.getenv("SMTP_USER", "")
     smtp_pass = os.getenv("SMTP_PASS", "")
-    from_email = os.getenv("FROM_EMAIL", smtp_user)
+    from_email = user["email"]
+    dry_run = not use_gmail and os.getenv("EMAIL_DRY_RUN", "true").lower() == "true"
 
     sent = 0
     skipped = 0
     limited = 0
+    errors = 0
 
     for row in rows:
         lead = dict(row)
@@ -466,15 +691,28 @@ def send_email(payload: ContactRequest) -> dict[str, Any]:
 
         rendered_body = render_contact_body_template(payload.body, lead)
 
+        if use_gmail:
+            try:
+                await send_via_gmail_api(user, to_email, payload.subject, rendered_body)
+                save_contact_log(lead["id"], "email", "sent", payload.subject, rendered_body)
+                increment_daily_stats("email", 1)
+                log_audit("contact_email", "lead", str(lead["id"]), {"status": "sent", "to": to_email, "via": "gmail"}, actor=user["email"])
+                sent += 1
+            except Exception as exc:  # noqa: BLE001
+                save_contact_log(lead["id"], "email", "failed", payload.subject, str(exc))
+                log_audit("contact_email", "lead", str(lead["id"]), {"status": "failed", "error": str(exc)}, actor=user["email"])
+                errors += 1
+            continue
+
         if dry_run:
             save_contact_log(lead["id"], "email", "dry_run", payload.subject, rendered_body)
             increment_daily_stats("email", 1)
-            log_audit("contact_email", "lead", str(lead["id"]), {"status": "dry_run", "to": to_email})
+            log_audit("contact_email", "lead", str(lead["id"]), {"status": "dry_run", "to": to_email}, actor=user["email"])
             sent += 1
             continue
 
-        if not smtp_host or not from_email:
-            raise HTTPException(status_code=400, detail="SMTP設定が不足しています")
+        if not smtp_host:
+            raise HTTPException(status_code=400, detail="SMTP設定が不足しています。または再ログインしてGmail権限を許可してください。")
 
         msg = MIMEText(rendered_body, "plain", "utf-8")
         msg["Subject"] = payload.subject
@@ -489,17 +727,19 @@ def send_email(payload: ContactRequest) -> dict[str, Any]:
                 server.sendmail(from_email, [to_email], msg.as_string())
             save_contact_log(lead["id"], "email", "sent", payload.subject, rendered_body)
             increment_daily_stats("email", 1)
-            log_audit("contact_email", "lead", str(lead["id"]), {"status": "sent", "to": to_email})
+            log_audit("contact_email", "lead", str(lead["id"]), {"status": "sent", "to": to_email}, actor=user["email"])
             sent += 1
         except Exception as exc:  # noqa: BLE001
             save_contact_log(lead["id"], "email", "failed", payload.subject, str(exc))
-            log_audit("contact_email", "lead", str(lead["id"]), {"status": "failed", "error": str(exc)})
+            log_audit("contact_email", "lead", str(lead["id"]), {"status": "failed", "error": str(exc)}, actor=user["email"])
+            errors += 1
 
-    return {"sent": sent, "skipped": skipped, "limited": limited, "dry_run": dry_run}
+    via = "gmail" if use_gmail else ("dry_run" if dry_run else "smtp")
+    return {"sent": sent, "skipped": skipped, "limited": limited, "errors": errors, "via": via}
 
 
 @app.post("/api/contact/form")
-def send_form(payload: ContactRequest) -> dict[str, Any]:
+def send_form(payload: ContactRequest, user: CurrentUser) -> dict[str, Any]:
     init_db()
     if not payload.lead_ids:
         raise HTTPException(status_code=400, detail="対象企業を選択してください")
@@ -511,13 +751,13 @@ def send_form(payload: ContactRequest) -> dict[str, Any]:
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         leads = conn.execute(
-            f"SELECT * FROM leads WHERE id IN ({','.join(['?'] * len(payload.lead_ids))})",
-            payload.lead_ids,
+            f"SELECT * FROM leads WHERE id IN ({','.join(['?'] * len(payload.lead_ids))}) AND user_id = ?",
+            [*payload.lead_ids, user["id"]],
         ).fetchall()
 
     dry_run = os.getenv("FORM_DRY_RUN", "true").lower() == "true"
-    from_email = os.getenv("FROM_EMAIL", "")
-    from_name = os.getenv("CONTACT_FROM_NAME", "AutoSales")
+    from_email = user["email"]
+    from_name = user.get("name") or os.getenv("CONTACT_FROM_NAME", "AutoSales")
 
     sent = 0
     skipped = 0
@@ -598,7 +838,7 @@ def send_form(payload: ContactRequest) -> dict[str, Any]:
 
 
 @app.get("/api/form-adapters")
-def list_form_adapters() -> dict[str, Any]:
+def list_form_adapters(user: CurrentUser) -> dict[str, Any]:
     init_db()
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
@@ -607,7 +847,7 @@ def list_form_adapters() -> dict[str, Any]:
 
 
 @app.post("/api/form-adapters")
-def create_form_adapter(payload: FormAdapterRequest) -> dict[str, Any]:
+def create_form_adapter(payload: FormAdapterRequest, user: CurrentUser) -> dict[str, Any]:
     init_db()
     domain = normalize_domain(payload.domain if payload.domain.startswith("http") else f"https://{payload.domain}")
     if not domain:
@@ -643,7 +883,7 @@ def create_form_adapter(payload: FormAdapterRequest) -> dict[str, Any]:
 
 
 @app.get("/api/suppressions")
-def list_suppressions() -> dict[str, Any]:
+def list_suppressions(user: CurrentUser) -> dict[str, Any]:
     init_db()
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
@@ -652,7 +892,7 @@ def list_suppressions() -> dict[str, Any]:
 
 
 @app.post("/api/suppressions")
-def add_suppression(payload: SuppressionRequest) -> dict[str, Any]:
+def add_suppression(payload: SuppressionRequest, user: CurrentUser) -> dict[str, Any]:
     init_db()
     email = normalize_email(payload.email)
     if not EMAIL_REGEX.fullmatch(email):
@@ -674,7 +914,7 @@ def add_suppression(payload: SuppressionRequest) -> dict[str, Any]:
 
 
 @app.delete("/api/suppressions/{email}")
-def remove_suppression(email: str) -> dict[str, Any]:
+def remove_suppression(email: str, user: CurrentUser) -> dict[str, Any]:
     init_db()
     normalized = normalize_email(email)
     with sqlite3.connect(DB_PATH) as conn:
@@ -684,7 +924,7 @@ def remove_suppression(email: str) -> dict[str, Any]:
 
 
 @app.post("/api/leads/tags/bulk")
-def update_manual_tags(payload: BulkTagRequest) -> dict[str, Any]:
+def update_manual_tags(payload: BulkTagRequest, user: CurrentUser) -> dict[str, Any]:
     init_db()
     if not payload.lead_ids:
         raise HTTPException(status_code=400, detail="対象企業を選択してください")
@@ -714,7 +954,7 @@ def update_manual_tags(payload: BulkTagRequest) -> dict[str, Any]:
 
 
 @app.get("/api/audit-logs")
-def get_audit_logs(limit: int = Query(50, ge=1, le=500)) -> dict[str, Any]:
+def get_audit_logs(user: CurrentUser, limit: int = Query(50, ge=1, le=500)) -> dict[str, Any]:
     init_db()
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
@@ -854,13 +1094,13 @@ def render_contact_body_template(body: str, lead: dict[str, Any]) -> str:
     return out
 
 
-def upsert_lead(item: dict[str, Any]) -> None:
+def upsert_lead(item: dict[str, Any], user_id: int | None = None) -> None:
     now = now_iso()
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
-            INSERT INTO leads (name, place_id, website, phone, email, address, category, industry, rating, user_ratings_total, raw_types, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO leads (name, place_id, website, phone, email, address, category, industry, rating, user_ratings_total, raw_types, user_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(place_id) DO UPDATE SET
                 name=excluded.name,
                 website=excluded.website,
@@ -872,6 +1112,7 @@ def upsert_lead(item: dict[str, Any]) -> None:
                 rating=excluded.rating,
                 user_ratings_total=excluded.user_ratings_total,
                 raw_types=excluded.raw_types,
+                user_id=excluded.user_id,
                 updated_at=excluded.updated_at
             """,
             (
@@ -886,6 +1127,7 @@ def upsert_lead(item: dict[str, Any]) -> None:
                 item.get("rating"),
                 item.get("user_ratings_total"),
                 item.get("raw_types", ""),
+                user_id,
                 now,
                 now,
             ),

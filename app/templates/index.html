@@ -14,6 +14,17 @@
         <p>Lead Workspace</p>
       </div>
 
+      <div class="user-card">
+        {% if user.picture %}
+        <img class="user-avatar" src="{{ user.picture }}" alt="{{ user.name }}" referrerpolicy="no-referrer" />
+        {% endif %}
+        <div class="user-info">
+          <div class="user-name">{{ user.name }}</div>
+          <div class="user-email">{{ user.email }}</div>
+          <div id="gmail-badge" class="gmail-badge"></div>
+        </div>
+      </div>
+
       <nav class="menu" id="view-menu">
         <button class="menu-item active" data-view="dashboard">ダッシュボード</button>
         <button class="menu-item" data-view="settings">APIキー設定</button>
@@ -28,6 +39,7 @@
 
       <div class="sidebar-foot">
         <p id="limit-result">上限を読み込み中...</p>
+        <a href="/auth/logout" class="logout-link">ログアウト</a>
       </div>
     </aside>
 
