@@ -65,6 +65,7 @@ let placeTypeItems = [];
 let leadSortBy = 'updated_at';
 let leadSortDir = 'desc';
 const API_BASE_URL = String(window.__API_BASE_URL || '').trim().replace(/\/$/, '');
+const IS_GITHUB_PAGES = window.location.hostname.endsWith('github.io');
 const IS_PLACEHOLDER_API_BASE_URL = API_BASE_URL === 'https://YOUR-BACKEND-URL';
 
 const STATUS_LABELS = {
@@ -113,6 +114,10 @@ function toLogStatusLabel(value) {
 }
 
 async function apiFetch(url, options = {}) {
+  if (IS_GITHUB_PAGES && !API_BASE_URL) {
+    throw new Error('PAGES_API_BASE_URL が未設定です。GitHub Actions Variables に本番API URLを設定してください。');
+  }
+
   if (IS_PLACEHOLDER_API_BASE_URL) {
     throw new Error('PAGES_API_BASE_URL が未設定です。GitHub Actions Variables に本番API URLを設定してください。');
   }
