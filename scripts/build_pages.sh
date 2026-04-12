@@ -16,8 +16,9 @@ sed -i 's|/static/styles.css|./styles.css|g' "$OUT_DIR/index.html"
 sed -i 's|/static/favicon.svg|./favicon.svg|g' "$OUT_DIR/index.html"
 sed -i 's|/static/app.js|./app.js|g' "$OUT_DIR/index.html"
 
-# Pages配信時のAPI先を切り替える。未設定時は空文字を入れて、フロント側で明示エラーにする。
-API_BASE_URL="${PAGES_API_BASE_URL:-}"
+# Pages配信時のAPI先を切り替える。
+# リポジトリ変数が未設定の環境でも公開を継続できるよう、既定値を本番URLにしている。
+API_BASE_URL="${PAGES_API_BASE_URL:-https://maptolist.onrender.com}"
 awk -v api_url="$API_BASE_URL" '
   /<script src="\.\/app\.js"><\/script>/ {
     print "  <script>window.__API_BASE_URL = \"" api_url "\";</script>";
