@@ -26,6 +26,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = BASE_DIR / "autosales.db"
 load_dotenv(BASE_DIR / ".env")
 EMAIL_REGEX = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+POSTAL_CODE_REGEX = re.compile(r"〒?\s*(\d{3})[-ー]?\s*(\d{4})")
+PREFECTURE_REGEX = re.compile(
+    r"(北海道|(?:東京都|京都府|大阪府)|(?:.{2,3}県))"
+)
+CITY_REGEX = re.compile(
+    r"^(.*?(?:市.*?区|市|区|町|村))"
+)
 DEFAULT_DAILY_SEND_LIMIT = int(os.getenv("DAILY_SEND_LIMIT", "100"))
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
@@ -325,6 +332,11 @@ def init_db() -> None:
         safe_add_column(conn, "leads", "rating REAL")
         safe_add_column(conn, "leads", "user_ratings_total INTEGER")
         safe_add_column(conn, "leads", "editorial_summary TEXT")
+        safe_add_column(conn, "leads", "postal_code TEXT")
+        safe_add_column(conn, "leads", "prefecture TEXT")
+        safe_add_column(conn, "leads", "city TEXT")
+        safe_add_column(conn, "leads", "address_detail TEXT")
+        safe_add_column(conn, "leads", "address_components_json TEXT")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS contact_logs (
@@ -444,6 +456,106 @@ def init_db() -> None:
 
 def now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def split_jp_address(raw_address: str) -> dict[str, str]:
+    """Split Japanese address into postal code/prefecture/city/detail for display."""
+    text = (raw_address or "").strip()
+    postal_code = ""
+    prefecture = ""
+    city = ""
+    detail = ""
+
+    if not text:
+        return {
+            "postal_code": postal_code,
+            "prefecture": prefecture,
+            "city": city,
+            "address_detail": detail,
+        }
+
+    m_postal = POSTAL_CODE_REGEX.search(text)
+    if m_postal:
+        postal_code = f"{m_postal.group(1)}-{m_postal.group(2)}"
+        text = (text[:m_postal.start()] + text[m_postal.end():]).strip()
+
+    m_pref = PREFECTURE_REGEX.search(text)
+    if m_pref:
+        prefecture = m_pref.group(1)
+        rest = text[m_pref.end():].strip()
+    else:
+        rest = text
+
+    m_city = CITY_REGEX.match(rest)
+    if m_city:
+        city = m_city.group(1).strip()
+        detail = rest[m_city.end():].strip()
+    else:
+        detail = rest
+
+    return {
+        "postal_code": postal_code,
+        "prefecture": prefecture,
+        "city": city,
+        "address_detail": detail,
+    }
+
+
+def parse_address_components(address_components: list[dict[str, Any]]) -> dict[str, str]:
+    """Extract key address fields from Google Places address_components."""
+    if not address_components:
+        return {
+            "postal_code": "",
+            "prefecture": "",
+            "city": "",
+            "address_detail": "",
+        }
+
+    by_type: dict[str, str] = {}
+    for component in address_components:
+        long_name = str(component.get("long_name", "")).strip()
+        types = component.get("types", [])
+        if not long_name or not isinstance(types, list):
+            continue
+        for t in types:
+            t_name = str(t).strip()
+            if t_name and t_name not in by_type:
+                by_type[t_name] = long_name
+
+    postal = by_type.get("postal_code", "")
+    postal_suffix = by_type.get("postal_code_suffix", "")
+    postal_code = f"{postal}-{postal_suffix}" if postal and postal_suffix else postal
+
+    prefecture = by_type.get("administrative_area_level_1", "")
+    city = (
+        by_type.get("locality", "")
+        or by_type.get("administrative_area_level_2", "")
+        or by_type.get("sublocality_level_1", "")
+    )
+
+    detail_parts: list[str] = []
+    for key in [
+        "sublocality_level_2",
+        "sublocality_level_3",
+        "sublocality_level_4",
+        "sublocality_level_5",
+        "route",
+        "street_number",
+        "premise",
+        "subpremise",
+    ]:
+        val = by_type.get(key, "")
+        if val:
+            detail_parts.append(val)
+
+    address_detail = "".join(detail_parts)
+
+    return {
+        "postal_code": postal_code,
+        "prefecture": prefecture,
+        "city": city,
+        "address_detail": address_detail,
+    }
 
 
 def safe_add_column(conn: sqlite3.Connection, table: str, column_def: str) -> None:
@@ -817,6 +929,8 @@ def get_leads(
     q: str = Query("", description="会社名や住所で検索"),
     category: str = Query("", description="業種フィルタ"),
     industry: str = Query("", description="業界フィルタ"),
+    sort_by: str = Query("updated_at", description="並び替え項目"),
+    sort_dir: str = Query("desc", description="並び順 asc/desc"),
 ) -> dict[str, Any]:
     init_db()
 
@@ -845,7 +959,26 @@ def get_leads(
         sql += " AND COALESCE(mt.industry, l.industry) = ?"
         params.append(industry)
 
-    sql += " ORDER BY l.updated_at DESC"
+    allowed_sort_columns = {
+        "updated_at": "l.updated_at",
+        "address": "l.address",
+        "name": "l.name",
+        "category": "COALESCE(mt.category, l.category)",
+        "industry": "COALESCE(mt.industry, l.industry)",
+        "rating": "l.rating",
+        "user_ratings_total": "l.user_ratings_total",
+    }
+
+    normalized_dir = sort_dir.strip().lower()
+    if normalized_dir not in {"asc", "desc"}:
+        raise HTTPException(status_code=400, detail="sort_dir は asc または desc を指定してください")
+
+    normalized_sort_by = sort_by.strip().lower()
+    sort_column = allowed_sort_columns.get(normalized_sort_by)
+    if not sort_column:
+        raise HTTPException(status_code=400, detail="未対応の sort_by です")
+
+    sql += f" ORDER BY {sort_column} {normalized_dir}, l.updated_at DESC"
 
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
@@ -873,6 +1006,30 @@ def get_leads(
     for row in rows:
         item = dict(row)
         item["suppressed"] = is_suppressed(item.get("email", ""))
+
+        components_json = item.get("address_components_json", "") or ""
+        resolved = {
+            "postal_code": item.get("postal_code", "") or "",
+            "prefecture": item.get("prefecture", "") or "",
+            "city": item.get("city", "") or "",
+            "address_detail": item.get("address_detail", "") or "",
+        }
+
+        if components_json and not all(resolved.values()):
+            try:
+                parsed_components = json.loads(components_json)
+                if isinstance(parsed_components, list):
+                    from_components = parse_address_components(parsed_components)
+                    for k, v in from_components.items():
+                        if not resolved[k] and v:
+                            resolved[k] = v
+            except json.JSONDecodeError:
+                pass
+
+        if not any(resolved.values()):
+            resolved = split_jp_address(item.get("address", ""))
+
+        item.update(resolved)
         items.append(item)
 
     return {
@@ -880,6 +1037,10 @@ def get_leads(
         "filters": {
             "categories": [r[0] for r in categories],
             "industries": [r[0] for r in industries],
+        },
+        "sort": {
+            "sort_by": normalized_sort_by,
+            "sort_dir": normalized_dir,
         },
         "send_limit": {
             "daily_limit": DEFAULT_DAILY_SEND_LIMIT,
@@ -1317,7 +1478,7 @@ async def fetch_places(
             for place in results:
                 detail_params = {
                     "place_id": place.get("place_id"),
-                    "fields": "name,website,formatted_phone_number,formatted_address,types,rating,user_ratings_total",
+                    "fields": "name,website,formatted_phone_number,formatted_address,address_components,types,rating,user_ratings_total",
                     "language": language,
                     "key": api_key,
                 }
@@ -1332,6 +1493,10 @@ async def fetch_places(
                 website = detail_data.get("website", "")
                 email = await extract_email_from_website(client, website)
                 category, industry = classify_business(detail_types, place.get("name", ""), website)
+                address_components = detail_data.get("address_components", [])
+                if not isinstance(address_components, list):
+                    address_components = []
+                address_parts = parse_address_components(address_components)
 
                 places.append(
                     {
@@ -1346,6 +1511,11 @@ async def fetch_places(
                         "raw_types": ",".join(detail_types),
                         "category": category,
                         "industry": industry,
+                        "postal_code": address_parts.get("postal_code", ""),
+                        "prefecture": address_parts.get("prefecture", ""),
+                        "city": address_parts.get("city", ""),
+                        "address_detail": address_parts.get("address_detail", ""),
+                        "address_components_json": json.dumps(address_components, ensure_ascii=False),
                     }
                 )
                 if len(places) >= max_results:
@@ -1445,8 +1615,8 @@ def upsert_lead(item: dict[str, Any], user_id: int | None = None) -> None:
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
-            INSERT INTO leads (name, place_id, website, phone, email, address, category, industry, rating, user_ratings_total, raw_types, user_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO leads (name, place_id, website, phone, email, address, category, industry, rating, user_ratings_total, raw_types, postal_code, prefecture, city, address_detail, address_components_json, user_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(place_id) DO UPDATE SET
                 name=excluded.name,
                 website=excluded.website,
@@ -1458,6 +1628,11 @@ def upsert_lead(item: dict[str, Any], user_id: int | None = None) -> None:
                 rating=excluded.rating,
                 user_ratings_total=excluded.user_ratings_total,
                 raw_types=excluded.raw_types,
+                postal_code=excluded.postal_code,
+                prefecture=excluded.prefecture,
+                city=excluded.city,
+                address_detail=excluded.address_detail,
+                address_components_json=excluded.address_components_json,
                 user_id=excluded.user_id,
                 updated_at=excluded.updated_at
             """,
@@ -1473,6 +1648,11 @@ def upsert_lead(item: dict[str, Any], user_id: int | None = None) -> None:
                 item.get("rating"),
                 item.get("user_ratings_total"),
                 item.get("raw_types", ""),
+                item.get("postal_code", ""),
+                item.get("prefecture", ""),
+                item.get("city", ""),
+                item.get("address_detail", ""),
+                item.get("address_components_json", ""),
                 user_id,
                 now,
                 now,

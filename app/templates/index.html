@@ -17,7 +17,7 @@
       <nav class="menu" id="view-menu">
         <button class="menu-item" data-view="settings">APIキー設定</button>
         <button class="menu-item" data-view="import">データ取得</button>
-        <button class="menu-item active" data-view="leads">企業一覧・検索</button>
+        <button class="menu-item active" data-view="leads">取得結果一覧</button>
       </nav>
     </aside>
 
@@ -60,7 +60,7 @@
             <label>キーワード<input name="query" required placeholder="例: 税理士 / カフェ / 自動車整備 / 不動産 東京" /></label>
             <label>地域<input name="region" placeholder="例: 新宿区" /></label>
             <label>最大件数<input type="number" name="max_results" min="1" max="60" value="20" /></label>
-            <p class="field-note">※件数に応じて、Google Cloudeの利用料が発生します。</p>
+            <p class="field-note">※件数に応じて、Google Cloudの利用料が発生します。</p>
             <button type="submit">取得開始</button>
           </form>
           <p id="import-result" class="muted"></p>
@@ -69,47 +69,44 @@
 
       <section class="view active" id="view-leads">
         <div class="panel">
-          <h3>企業一覧・フィルタ</h3>
+          <h3>取得結果一覧</h3>
           <form id="filter-form" class="form-grid compact">
             <label>検索<input name="q" placeholder="会社名/住所/URL" /></label>
             <label>業種<select name="category"><option value="">すべて</option></select></label>
             <label>業界<select name="industry"><option value="">すべて</option></select></label>
+            <label>並び替え
+              <select name="sort_by">
+                <option value="updated_at">更新日時</option>
+                <option value="address">住所</option>
+                <option value="category">業種</option>
+                <option value="industry">業界</option>
+                <option value="name">企業・団体名</option>
+                <option value="rating">評価</option>
+                <option value="user_ratings_total">評価件数</option>
+              </select>
+            </label>
+            <label>並び順
+              <select name="sort_dir">
+                <option value="asc">昇順</option>
+                <option value="desc" selected>降順</option>
+              </select>
+            </label>
             <button type="submit">再検索</button>
           </form>
-          <div class="inline-actions">
-            <button id="add-to-my-list" type="button" class="ghost">選択をマイリストへ追加</button>
-            <label>初期ステータス
-              <select id="my-list-default-status">
-                <option value="new">new</option>
-                <option value="contacted">contacted</option>
-                <option value="nurturing">nurturing</option>
-                <option value="closed">closed</option>
-                <option value="excluded">excluded</option>
-              </select>
-            </label>
-            <label>優先度
-              <select id="my-list-default-priority">
-                <option value="high">high</option>
-                <option value="medium" selected>medium</option>
-                <option value="low">low</option>
-              </select>
-            </label>
-          </div>
-          <p id="my-list-add-result" class="muted"></p>
           <div class="table-wrap">
             <table id="lead-table">
               <thead>
                 <tr>
                   <th><input type="checkbox" id="select-all" /></th>
-                  <th>会社名</th>
-                  <th>有効業種</th>
-                  <th>有効業界</th>
+                  <th>住所</th>
+                  <th>企業・団体名</th>
+                  <th>業種</th>
+                  <th>業界</th>
                   <th>評価</th>
                   <th>評価件数</th>
                   <th>Web</th>
                   <th>電話</th>
                   <th>メール</th>
-                  <th>住所</th>
                 </tr>
               </thead>
               <tbody></tbody>

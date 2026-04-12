@@ -180,6 +180,7 @@ function renderLeadsTable(items) {
       (item) => `
       <tr>
         <td><input type="checkbox" class="lead-check" value="${item.id}" /></td>
+        <td>${escapeHtml(item.address)}</td>
         <td>${escapeHtml(item.name)}</td>
         <td>${escapeHtml(item.effective_category || item.category)}</td>
         <td>${escapeHtml(item.effective_industry || item.industry)}</td>
@@ -188,7 +189,6 @@ function renderLeadsTable(items) {
         <td>${item.website ? `<a href="${escapeHtml(item.website)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.website)}</a>` : ''}</td>
         <td>${escapeHtml(item.phone)}</td>
         <td>${escapeHtml(item.email)}${item.suppressed ? ' (停止中)' : ''}</td>
-        <td>${escapeHtml(item.address)}</td>
       </tr>
     `,
     )
