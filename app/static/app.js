@@ -114,21 +114,11 @@ async function apiFetch(url, options = {}) {
 }
 
 async function loadUserBadge() {
-  const res = await apiFetch('/api/auth/me');
-  if (!res) return;
-  const data = await res.json();
-  const badge = document.querySelector('#gmail-badge');
-  if (!badge) return;
-  if (data.gmail_connected) {
-    badge.textContent = '✉ Gmail 接続済み';
-    badge.className = 'gmail-badge connected';
-  } else {
-    badge.textContent = '⚠ Gmail 未接続';
-    badge.className = 'gmail-badge disconnected';
-  }
+  return undefined;
 }
 
 function addActivity(text, who = 'system') {
+  if (!activityFeed) return;
   const el = document.createElement('div');
   el.className = `chat-item ${who}`;
   el.textContent = `[${new Date().toLocaleTimeString('ja-JP')}] ${text}`;
@@ -428,10 +418,13 @@ async function fetchLeads() {
   renderLeadsTable(currentItems);
   renderOptions(categorySelect, data.filters.categories || [], filterForm.category.value);
   renderOptions(industrySelect, data.filters.industries || [], filterForm.industry.value);
-  limitResult.textContent = `本日上限 ${data.send_limit.daily_limit}件 / email残 ${data.send_limit.email_remaining} / form残 ${data.send_limit.form_remaining}`;
+  if (limitResult) {
+    limitResult.textContent = `本日上限 ${data.send_limit.daily_limit}件 / email残 ${data.send_limit.email_remaining} / form残 ${data.send_limit.form_remaining}`;
+  }
 }
 
 async function fetchMyList() {
+  if (!myListFilterForm) return;
   const params = new URLSearchParams(new FormData(myListFilterForm));
   persistMyListFilterToUrl(params);
   const res = await apiFetch(`/api/my-list?${params.toString()}`);
@@ -465,6 +458,7 @@ async function fetchLeadNameSuggestions() {
 }
 
 async function fetchContactLogs() {
+  if (!historyFilterForm) return;
   const params = new URLSearchParams(new FormData(historyFilterForm));
   const res = await apiFetch(`/api/contact-logs?${params.toString()}`);
   if (!res) return;
@@ -1009,10 +1003,6 @@ myListSelectAll?.addEventListener('change', (e) => {
 
 hydrateMyListFilterFromUrl();
 loadUserBadge();
-addActivity('ワークスペースを初期化しました。左メニューから操作を選択してください。', 'system');
 fetchLeads();
-fetchMyList();
-fetchContactLogs();
-fetchLeadNameSuggestions();
 fetchGoogleKeyStatus();
 fetchPlaceTypes();

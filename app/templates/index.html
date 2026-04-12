@@ -14,45 +14,17 @@
         <p>Lead Workspace</p>
       </div>
 
-      <div class="user-card">
-        {% if user.picture %}
-        <img class="user-avatar" src="{{ user.picture }}" alt="{{ user.name }}" referrerpolicy="no-referrer" />
-        {% endif %}
-        <div class="user-info">
-          <div class="user-name">{{ user.name }}</div>
-          <div class="user-email">{{ user.email }}</div>
-          <div id="gmail-badge" class="gmail-badge"></div>
-        </div>
-      </div>
-
       <nav class="menu" id="view-menu">
-        <button class="menu-item active" data-view="dashboard">ダッシュボード</button>
         <button class="menu-item" data-view="settings">APIキー設定</button>
         <button class="menu-item" data-view="import">データ取得</button>
-        <button class="menu-item" data-view="leads">企業一覧・検索</button>
-        <button class="menu-item" data-view="my-list">マイリスト</button>
-        <button class="menu-item" data-view="history">履歴</button>
-        <button class="menu-item" data-view="contact">連絡実行</button>
-        <button class="menu-item" data-view="tags">手動タグ</button>
-        <button class="menu-item" data-view="suppression">配信停止</button>
-        <button class="menu-item" data-view="adapters">フォームアダプタ</button>
-        <button class="menu-item" data-view="audit">監査ログ</button>
+        <button class="menu-item active" data-view="leads">企業一覧・検索</button>
       </nav>
-
-      <div class="sidebar-foot">
-        <p id="limit-result">上限を読み込み中...</p>
-        <a href="/auth/logout" class="logout-link">ログアウト</a>
-      </div>
     </aside>
 
     <main class="workspace">
       <header class="workspace-head">
-        <h2>営業リード運用コンソール</h2>
+        <h2>営業リスト収集ワークスペース</h2>
       </header>
-
-      <section class="view active" id="view-dashboard">
-        <div class="chat-surface" id="activity-feed"></div>
-      </section>
 
       <section class="view" id="view-settings">
         <div class="panel">
@@ -83,25 +55,19 @@
 
       <section class="view" id="view-import">
         <div class="panel">
-          <h3>Google Places 取り込み（幅広い業種対応）</h3>
+          <h3>Google Places API 取り込み</h3>
           <form id="import-form" class="form-grid">
             <label>キーワード<input name="query" required placeholder="例: 税理士 / カフェ / 自動車整備 / 不動産 東京" /></label>
-            <label>業種プリセット（任意）
-              <input id="place-type-filter" type="text" placeholder="業種名で絞り込み（例: カフェ, 病院, 不動産）" />
-              <select name="place_type" id="place-type-select">
-                <option value="">すべて</option>
-              </select>
-            </label>
-            <p class="muted">業種を選ぶと、キーワードが空の場合に自動で候補語を入力します。</p>
             <label>地域<input name="region" placeholder="例: 新宿区" /></label>
             <label>最大件数<input type="number" name="max_results" min="1" max="60" value="20" /></label>
+            <p class="field-note">※件数に応じて、Google Cloudeの利用料が発生します。</p>
             <button type="submit">取得開始</button>
           </form>
           <p id="import-result" class="muted"></p>
         </div>
       </section>
 
-      <section class="view" id="view-leads">
+      <section class="view active" id="view-leads">
         <div class="panel">
           <h3>企業一覧・フィルタ</h3>
           <form id="filter-form" class="form-grid compact">
@@ -152,250 +118,6 @@
         </div>
       </section>
 
-      <section class="view" id="view-my-list">
-        <div class="panel">
-          <h3>マイリスト</h3>
-          <div class="status-tabs" id="my-list-status-tabs">
-            <button type="button" class="ghost status-tab active" data-status="">すべて</button>
-            <button type="button" class="ghost status-tab" data-status="new">未対応</button>
-            <button type="button" class="ghost status-tab" data-status="contacted">連絡済み</button>
-            <button type="button" class="ghost status-tab" data-status="nurturing">育成中</button>
-            <button type="button" class="ghost status-tab" data-status="closed">クローズ</button>
-            <button type="button" class="ghost status-tab" data-status="excluded">除外</button>
-          </div>
-          <form id="my-list-filter-form" class="form-grid compact">
-            <label>検索<input name="q" placeholder="会社名/住所/URL" /></label>
-            <label>ステータス
-              <select name="status">
-                <option value="">すべて</option>
-              </select>
-            </label>
-            <label>優先度
-              <select name="priority">
-                <option value="">すべて</option>
-                <option value="high">高</option>
-                <option value="medium">中</option>
-                <option value="low">低</option>
-              </select>
-            </label>
-            <label>並び替え
-              <select name="sort_by">
-                <option value="updated_at">更新日時</option>
-                <option value="last_contacted_at">最終送信日時</option>
-                <option value="contact_count">送信回数</option>
-                <option value="priority">優先度</option>
-                <option value="name">会社名</option>
-                <option value="added_at">追加日時</option>
-              </select>
-            </label>
-            <label>並び順
-              <select name="sort_dir">
-                <option value="desc">降順</option>
-                <option value="asc">昇順</option>
-              </select>
-            </label>
-            <button type="submit">再検索</button>
-          </form>
-
-          <form id="my-list-update-form" class="form-grid compact">
-            <label>更新ステータス
-              <select name="status">
-                <option value="">変更しない</option>
-                <option value="new">new</option>
-                <option value="contacted">contacted</option>
-                <option value="nurturing">nurturing</option>
-                <option value="closed">closed</option>
-                <option value="excluded">excluded</option>
-              </select>
-            </label>
-            <label>更新優先度
-              <select name="priority">
-                <option value="">変更しない</option>
-                <option value="high">高</option>
-                <option value="medium">中</option>
-                <option value="low">低</option>
-              </select>
-            </label>
-            <label>メモ
-              <input name="note" placeholder="次回連絡予定など" />
-            </label>
-            <label>担当者
-              <input name="owner_name" placeholder="担当者名" />
-            </label>
-            <button type="submit">選択項目を更新</button>
-            <button id="my-list-remove-btn" type="button" class="ghost">選択項目を削除</button>
-            <button id="my-list-send-btn" type="button" class="ghost">選択項目へメール送信</button>
-          </form>
-
-          <p id="my-list-result" class="muted"></p>
-
-          <div class="table-wrap">
-            <table id="my-list-table">
-              <thead>
-                <tr>
-                  <th><input type="checkbox" id="my-list-select-all" /></th>
-                  <th>会社名</th>
-                  <th>業種</th>
-                  <th>業界</th>
-                  <th>ステータス</th>
-                  <th>優先度</th>
-                  <th>最終送信日時</th>
-                  <th>送信回数</th>
-                  <th>メール</th>
-                  <th>住所</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <section class="view" id="view-history">
-        <div class="panel">
-          <h3>アプローチ履歴</h3>
-          <form id="history-filter-form" class="form-grid compact">
-            <label>企業名/件名/本文
-              <input name="q" placeholder="会社名や件名で検索" list="lead-name-suggestions" />
-            </label>
-            <datalist id="lead-name-suggestions"></datalist>
-            <label>開始日
-              <input name="from_date" type="date" />
-            </label>
-            <label>終了日
-              <input name="to_date" type="date" />
-            </label>
-            <label>チャネル
-              <select name="channel">
-                <option value="">すべて</option>
-                <option value="email">email</option>
-                <option value="form">form</option>
-              </select>
-            </label>
-            <label>結果
-              <select name="status">
-                <option value="">すべて</option>
-                <option value="sent">sent</option>
-                <option value="dry_run">dry_run</option>
-                <option value="skipped">skipped</option>
-                <option value="failed">failed</option>
-                <option value="suppressed">suppressed</option>
-                <option value="daily_limit">daily_limit</option>
-                <option value="no_adapter">no_adapter</option>
-              </select>
-            </label>
-            <label>最大件数
-              <input name="limit" type="number" min="1" max="1000" value="200" />
-            </label>
-            <button type="submit">再取得</button>
-          </form>
-          <div class="history-presets">
-            <button type="button" class="ghost history-range-btn" data-range="today">今日</button>
-            <button type="button" class="ghost history-range-btn" data-range="7d">直近7日</button>
-            <button type="button" class="ghost history-range-btn" data-range="30d">直近30日</button>
-            <button type="button" class="ghost history-range-btn" data-range="clear">期間クリア</button>
-          </div>
-          <div id="history-summary" class="history-summary"></div>
-          <p id="history-result" class="muted"></p>
-          <div class="table-wrap">
-            <table id="history-table">
-              <thead>
-                <tr>
-                  <th>日時</th>
-                  <th>企業名</th>
-                  <th>送信先</th>
-                  <th>チャネル</th>
-                  <th>結果</th>
-                  <th>件名</th>
-                  <th>詳細</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-          <div id="history-timeline" class="simple-list"></div>
-        </div>
-      </section>
-
-      <section class="view" id="view-contact">
-        <div class="panel">
-          <h3>連絡実行</h3>
-          <form id="contact-form" class="form-grid">
-            <label>送信チャネル
-              <select name="channel">
-                <option value="email">メール</option>
-                <option value="form">問い合わせフォーム</option>
-              </select>
-            </label>
-            <label>件名<input name="subject" required placeholder="ご提案のご連絡" /></label>
-            <label>本文
-              <textarea name="body" rows="8" required placeholder="例: 株式会社〇〇 御中&#10;&#10;突然のご連絡失礼いたします。〇〇株式会社の△△と申します。&#10;貴社のご発展を拝察し、ご提案の機会をいただきたくご連絡いたしました。"></textarea>
-            </label>
-            <div class="hint-box">
-              <p class="hint-title">📌 本文に会社情報を自動で差し込む</p>
-              <p class="hint-desc">以下のキーワードを本文中に記述すると、送信時に各企業の情報に置き換えられます。</p>
-              <ul class="hint-list">
-                <li><code>{{company_name}}</code> — 会社名</li>
-                <li><code>{{company_address}}</code> — 住所</li>
-                <li><code>{{company_phone}}</code> — 電話番号</li>
-                <li><code>{{company_website}}</code> — WebサイトURL</li>
-              </ul>
-              <p class="hint-example">例: <code>{{company_name}} 御中　いつも大変お世話になっております。</code></p>
-            </div>
-            <button type="submit">✉ 選択した企業へ送信</button>
-          </form>
-          <p id="contact-result" class="muted"></p>
-        </div>
-      </section>
-
-      <section class="view" id="view-tags">
-        <div class="panel">
-          <h3>手動タグ編集（一括）</h3>
-          <form id="tag-form" class="form-grid compact">
-            <label>業種<input name="category" placeholder="工務店" /></label>
-            <label>業界<input name="industry" placeholder="住宅" /></label>
-            <label>メモ<input name="note" placeholder="判断理由" /></label>
-            <button type="submit">保存</button>
-          </form>
-          <p id="tag-result" class="muted"></p>
-        </div>
-      </section>
-
-      <section class="view" id="view-suppression">
-        <div class="panel">
-          <h3>配信停止管理</h3>
-          <form id="suppression-form" class="form-grid compact">
-            <label>メールアドレス<input name="email" type="email" required placeholder="example@company.jp" /></label>
-            <label>理由<input name="reason" value="user_request" /></label>
-            <button type="submit">追加</button>
-          </form>
-          <p id="suppression-result" class="muted"></p>
-          <div id="suppression-list" class="simple-list"></div>
-        </div>
-      </section>
-
-      <section class="view" id="view-adapters">
-        <div class="panel">
-          <h3>フォーム送信アダプタ</h3>
-          <form id="adapter-form" class="form-grid compact">
-            <label>アダプタ名<input name="name" required placeholder="A社フォーム" /></label>
-            <label>ドメイン<input name="domain" required placeholder="example.com" /></label>
-            <label>送信パス<input name="path" required placeholder="/contact/submit" /></label>
-            <button type="submit">登録/更新</button>
-          </form>
-          <p id="adapter-result" class="muted"></p>
-          <div id="adapter-list" class="simple-list"></div>
-        </div>
-      </section>
-
-      <section class="view" id="view-audit">
-        <div class="panel">
-          <h3>監査ログ</h3>
-          <button id="audit-refresh" class="ghost">最新化</button>
-          <div id="audit-list" class="simple-list"></div>
-        </div>
-      </section>
     </main>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
