@@ -9,7 +9,7 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.11
       - key: DISABLE_GOOGLE_LOGIN
-        value: "false"
+        value: "true"
       - key: CORS_ALLOW_ORIGINS
         value: https://macdown360.github.io
       - key: DB_PATH
