@@ -135,3 +135,37 @@ Codespaces / Dev Container では、`PORTS` タブで `8000` を `Open in Browse
 - Google Mapsの情報取得は必ず公式APIと利用規約に従ってください。
 - 問い合わせメール送信時は、関連法令・利用規約を遵守してください。
 - 問い合わせフォーム自動送信は、サイト側制限(CAPTCHA等)により非対応の場合があります。
+
+## GitHub Pagesで公開する
+
+このアプリはFastAPIバックエンドが必要なため、GitHub Pagesだけでは完結しません。
+公開構成は次の2段にします。
+
+- フロント: GitHub Pages
+- バックエンドAPI: Render / Railway / Fly.io など
+
+### 1. バックエンドを先に公開
+
+公開先の環境変数に最低限以下を設定してください。
+
+```bash
+SESSION_SECRET=十分長いランダム文字列
+DISABLE_GOOGLE_LOGIN=false
+CORS_ALLOW_ORIGINS=https://macdown360.github.io
+```
+
+このリポジトリのPages URLは `https://macdown360.github.io/autosales/` です。
+そのため `CORS_ALLOW_ORIGINS` は `https://macdown360.github.io` を設定してください。
+
+### 2. GitHub Pagesデプロイ
+
+このリポジトリには `/.github/workflows/pages.yml` を追加済みです。
+`main` へのpushでPagesが自動デプロイされます。
+
+1. GitHubの `Settings > Pages` で `GitHub Actions` を選択
+2. `Settings > Secrets and variables > Actions > Variables` に次を追加
+	- `PAGES_API_BASE_URL=https://<your-backend-domain>`
+3. `main` にpush（または Actions の `Deploy GitHub Pages` を手動実行）
+
+ビルド時に `scripts/build_pages.sh` が静的ファイルを生成し、
+Pages側のフロントから `PAGES_API_BASE_URL` へAPIリクエストします。

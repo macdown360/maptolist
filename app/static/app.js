@@ -64,6 +64,7 @@ let myListItems = [];
 let placeTypeItems = [];
 let leadSortBy = 'updated_at';
 let leadSortDir = 'desc';
+const API_BASE_URL = String(window.__API_BASE_URL || '').trim().replace(/\/$/, '');
 
 const STATUS_LABELS = {
   new: '未対応',
@@ -111,7 +112,11 @@ function toLogStatusLabel(value) {
 }
 
 async function apiFetch(url, options = {}) {
-  const res = await fetch(url, options);
+  let requestUrl = String(url || '');
+  if (API_BASE_URL && requestUrl.startsWith('/')) {
+    requestUrl = `${API_BASE_URL}${requestUrl}`;
+  }
+  const res = await fetch(requestUrl, options);
   if (res.status === 401) {
     window.location.href = '/';
     return null;

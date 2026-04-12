@@ -15,6 +15,7 @@ import smtplib
 import httpx
 from authlib.integrations.starlette_client import OAuth
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -39,6 +40,7 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
 SESSION_SECRET = os.getenv("SESSION_SECRET", secrets.token_hex(32))
 DISABLE_GOOGLE_LOGIN = os.getenv("DISABLE_GOOGLE_LOGIN", "false").lower() == "true"
+CORS_ALLOW_ORIGINS = [x.strip() for x in os.getenv("CORS_ALLOW_ORIGINS", "").split(",") if x.strip()]
 DEMO_USER_GOOGLE_ID = "local-demo-user"
 DEMO_USER_EMAIL = "demo@local"
 DEMO_USER_NAME = "Demo User"
@@ -230,6 +232,14 @@ TYPE_PRIORITY: list[str] = [
 
 app = FastAPI(title="AutoSales Lead Collector", version="0.3.0")
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, max_age=86400 * 30, https_only=False)
+if CORS_ALLOW_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=CORS_ALLOW_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 app.mount("/static", StaticFiles(directory=BASE_DIR / "app" / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
 
