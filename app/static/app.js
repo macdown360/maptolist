@@ -19,6 +19,7 @@ const googleKeyStatus = document.querySelector('#google-key-status');
 const myListAddResult = document.querySelector('#my-list-add-result');
 const myListResult = document.querySelector('#my-list-result');
 const historyResult = document.querySelector('#history-result');
+const exportResult = document.querySelector('#export-result');
 
 const suppressionList = document.querySelector('#suppression-list');
 const adapterList = document.querySelector('#adapter-list');
@@ -48,6 +49,8 @@ const toast = document.querySelector('#toast');
 const timelineMessageMap = new Map();
 
 const leadSelectAll = document.querySelector('#select-all');
+const exportCsvBtn = document.querySelector('#export-csv-btn');
+const exportExcelBtn = document.querySelector('#export-excel-btn');
 const myListSelectAll = document.querySelector('#my-list-select-all');
 const addToMyListBtn = document.querySelector('#add-to-my-list');
 const myListSendBtn = document.querySelector('#my-list-send-btn');
@@ -452,6 +455,136 @@ async function applyHistoryRange(range) {
 
 function getSelectedLeadIds() {
   return Array.from(document.querySelectorAll('.lead-check:checked')).map((el) => Number(el.value));
+}
+
+function getSelectedLeadItems() {
+  const selected = new Set(getSelectedLeadIds());
+  if (!selected.size) return [];
+  return currentItems.filter((item) => selected.has(Number(item.id)));
+}
+
+function exportRowsFromLeadItems(items) {
+  return items.map((item) => ({
+    id: item.id,
+    name: item.name || '',
+    address: item.address || '',
+    category: item.effective_category || item.category || '',
+    industry: item.effective_industry || item.industry || '',
+    rating: item.rating ?? '',
+    user_ratings_total: item.user_ratings_total ?? '',
+    website: item.website || '',
+    phone: item.phone || '',
+    email: item.email || '',
+    updated_at: item.updated_at || '',
+  }));
+}
+
+function downloadTextAsFile(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function escapeCsvCell(value) {
+  const str = String(value ?? '');
+  if (/[",\r\n]/.test(str)) {
+    return `"${str.replaceAll('"', '""')}"`;
+  }
+  return str;
+}
+
+function exportSelectedLeadsAsCsv() {
+  const selectedItems = getSelectedLeadItems();
+  if (!selectedItems.length) {
+    const msg = '出力対象の企業をチェックしてください';
+    if (exportResult) exportResult.textContent = msg;
+    showToast(msg, 'error');
+    return;
+  }
+
+  const rows = exportRowsFromLeadItems(selectedItems);
+  const headers = ['ID', '企業・団体名', '住所', '業種', '業界', '評価', '評価件数', 'Web', '電話', 'メール', '更新日時'];
+  const lines = [headers.join(',')];
+  for (const row of rows) {
+    lines.push([
+      row.id,
+      row.name,
+      row.address,
+      row.category,
+      row.industry,
+      row.rating,
+      row.user_ratings_total,
+      row.website,
+      row.phone,
+      row.email,
+      row.updated_at,
+    ].map(escapeCsvCell).join(','));
+  }
+
+  const csvContent = `\ufeff${lines.join('\r\n')}`;
+  downloadTextAsFile(csvContent, `map-gene-leads-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv;charset=utf-8;');
+
+  const msg = `${rows.length}件をCSV出力しました`;
+  if (exportResult) exportResult.textContent = msg;
+  addActivity(msg, 'user');
+  showToast('CSVをダウンロードしました', 'success');
+}
+
+function exportSelectedLeadsAsExcel() {
+  const selectedItems = getSelectedLeadItems();
+  if (!selectedItems.length) {
+    const msg = '出力対象の企業をチェックしてください';
+    if (exportResult) exportResult.textContent = msg;
+    showToast(msg, 'error');
+    return;
+  }
+
+  const rows = exportRowsFromLeadItems(selectedItems);
+  const trHtml = rows
+    .map(
+      (row) => `<tr>
+        <td>${escapeHtml(row.id)}</td>
+        <td>${escapeHtml(row.name)}</td>
+        <td>${escapeHtml(row.address)}</td>
+        <td>${escapeHtml(row.category)}</td>
+        <td>${escapeHtml(row.industry)}</td>
+        <td>${escapeHtml(row.rating)}</td>
+        <td>${escapeHtml(row.user_ratings_total)}</td>
+        <td>${escapeHtml(row.website)}</td>
+        <td>${escapeHtml(row.phone)}</td>
+        <td>${escapeHtml(row.email)}</td>
+        <td>${escapeHtml(row.updated_at)}</td>
+      </tr>`,
+    )
+    .join('');
+
+  const tableHtml = `\ufeff<html><head><meta charset="UTF-8" /></head><body><table border="1">
+    <tr>
+      <th>ID</th>
+      <th>企業・団体名</th>
+      <th>住所</th>
+      <th>業種</th>
+      <th>業界</th>
+      <th>評価</th>
+      <th>評価件数</th>
+      <th>Web</th>
+      <th>電話</th>
+      <th>メール</th>
+      <th>更新日時</th>
+    </tr>${trHtml}</table></body></html>`;
+
+  downloadTextAsFile(tableHtml, `map-gene-leads-${new Date().toISOString().slice(0, 10)}.xls`, 'application/vnd.ms-excel;charset=utf-8;');
+
+  const msg = `${rows.length}件をExcel出力しました`;
+  if (exportResult) exportResult.textContent = msg;
+  addActivity(msg, 'user');
+  showToast('Excelをダウンロードしました', 'success');
 }
 
 function getSelectedMyListItemIds() {
@@ -1085,6 +1218,9 @@ leadSelectAll?.addEventListener('change', (e) => {
     el.checked = checked;
   });
 });
+
+exportCsvBtn?.addEventListener('click', exportSelectedLeadsAsCsv);
+exportExcelBtn?.addEventListener('click', exportSelectedLeadsAsExcel);
 
 myListSelectAll?.addEventListener('change', (e) => {
   const checked = e.target.checked;

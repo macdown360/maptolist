@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Map Gene Workspace</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
@@ -76,6 +77,11 @@
             <label>業界<select name="industry"><option value="">すべて</option></select></label>
             <button type="submit">再検索</button>
           </form>
+          <div class="export-tools">
+            <button type="button" id="export-csv-btn" class="ghost">CSV出力</button>
+            <button type="button" id="export-excel-btn" class="ghost">Excel出力</button>
+            <p id="export-result" class="muted"></p>
+          </div>
           <div class="table-wrap">
             <table id="lead-table">
               <thead>

@@ -567,8 +567,9 @@ def safe_add_column(conn: sqlite3.Connection, table: str, column_def: str) -> No
 
 
 def get_google_api_key(user: dict[str, Any] | None = None) -> str:
-    if user and user.get("maps_api_key"):
-        return str(user["maps_api_key"]).strip()
+    # Authenticated users must use their own stored key.
+    if user is not None:
+        return str(user.get("maps_api_key", "")).strip()
     return os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
 
 
@@ -899,7 +900,7 @@ def auth_me(user: CurrentUser) -> dict[str, Any]:
 @app.get("/api/settings/google-maps-key")
 def get_google_maps_key_status(user: CurrentUser) -> dict[str, Any]:
     init_db()
-    key = get_google_api_key()
+    key = get_google_api_key(user)
     if not key:
         return {"configured": False, "masked": ""}
     return {

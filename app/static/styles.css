@@ -362,6 +362,18 @@ button.ghost:hover {
   margin-bottom: 14px;
 }
 
+.export-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+#export-result {
+  margin: 0;
+}
+
 table {
   width: 100%;
   border-collapse: separate;
