@@ -24,7 +24,8 @@ from dotenv import load_dotenv
 from starlette.middleware.sessions import SessionMiddleware
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DB_PATH = BASE_DIR / "maptolist.db"
+DEFAULT_DB_PATH = BASE_DIR / "maptolist.db"
+DB_PATH = Path(os.getenv("DB_PATH", str(DEFAULT_DB_PATH))).expanduser()
 LEGACY_DB_PATH = BASE_DIR / "autosales.db"
 INTERMEDIATE_DB_PATH = BASE_DIR / "mapgene.db"
 load_dotenv(BASE_DIR / ".env")
@@ -39,7 +40,7 @@ CITY_REGEX = re.compile(
 DEFAULT_DAILY_SEND_LIMIT = int(os.getenv("DAILY_SEND_LIMIT", "100"))
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
+APP_BASE_URL = os.getenv("APP_BASE_URL") or os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
 SESSION_SECRET = os.getenv("SESSION_SECRET", secrets.token_hex(32))
 DISABLE_GOOGLE_LOGIN = os.getenv("DISABLE_GOOGLE_LOGIN", "false").lower() == "true"
 CORS_ALLOW_ORIGINS = [x.strip() for x in os.getenv("CORS_ALLOW_ORIGINS", "").split(",") if x.strip()]
@@ -265,6 +266,7 @@ class ImportRequest(BaseModel):
     place_type: str = Field("", description="任意。Google Placesの業種タイプ")
     language: str = Field("ja", description="Google Places API language")
     max_results: int = Field(20, ge=1, le=60, description="取得件数上限")
+    api_key: str = Field("", description="任意。ブラウザ保存キーをリクエストで渡す")
 
 
 class ContactRequest(BaseModel):
@@ -318,6 +320,8 @@ def startup() -> None:
 
 
 def init_db() -> None:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
     if not DB_PATH.exists() and INTERMEDIATE_DB_PATH.exists():
         INTERMEDIATE_DB_PATH.replace(DB_PATH)
     if not DB_PATH.exists() and LEGACY_DB_PATH.exists():
@@ -1088,9 +1092,9 @@ def get_lead_names(user: CurrentUser, limit: int = Query(300, ge=1, le=2000)) ->
 @app.post("/api/import/google-places")
 async def import_google_places(payload: ImportRequest, user: CurrentUser) -> dict[str, Any]:
     init_db()
-    api_key = get_google_api_key(user)
+    api_key = payload.api_key.strip() or get_google_api_key(user)
     if not api_key:
-        raise HTTPException(status_code=400, detail="Google Maps APIキーが未設定です。設定画面で登録してください。")
+        raise HTTPException(status_code=400, detail="Google Maps APIキーが未設定です。APIキー設定でこのブラウザに保存してください。")
 
     query = payload.query.strip()
     if payload.region.strip():

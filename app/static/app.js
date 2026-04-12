@@ -64,6 +64,7 @@ let myListItems = [];
 let placeTypeItems = [];
 let leadSortBy = 'updated_at';
 let leadSortDir = 'desc';
+const MAPS_KEY_STORAGE_KEY = 'maptolist.google_maps_api_key';
 const API_BASE_URL = String(window.__API_BASE_URL || '').trim().replace(/\/$/, '');
 const IS_GITHUB_PAGES = window.location.hostname.endsWith('github.io');
 const IS_PLACEHOLDER_API_BASE_URL = API_BASE_URL === 'https://YOUR-BACKEND-URL';
@@ -111,6 +112,31 @@ function toChannelLabel(value) {
 
 function toLogStatusLabel(value) {
   return LOG_STATUS_LABELS[value] || value || '';
+}
+
+function getStoredMapsApiKey() {
+  try {
+    return String(window.localStorage.getItem(MAPS_KEY_STORAGE_KEY) || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+function setStoredMapsApiKey(value) {
+  try {
+    if (value) {
+      window.localStorage.setItem(MAPS_KEY_STORAGE_KEY, value);
+    } else {
+      window.localStorage.removeItem(MAPS_KEY_STORAGE_KEY);
+    }
+  } catch {
+    // noop
+  }
+}
+
+function maskApiKey(key) {
+  if (!key) return '';
+  return key.length >= 10 ? `${key.slice(0, 6)}...${key.slice(-4)}` : 'configured';
 }
 
 async function apiFetch(url, options = {}) {
@@ -859,24 +885,12 @@ async function fetchAuditLogs() {
 }
 
 async function fetchGoogleKeyStatus() {
-  let res;
-  try {
-    res = await apiFetch('/api/settings/google-maps-key');
-  } catch (err) {
-    googleKeyStatus.textContent = err instanceof Error ? err.message : String(err);
+  const key = getStoredMapsApiKey();
+  if (!key) {
+    googleKeyStatus.textContent = '未設定です。このブラウザにAPIキーを保存してください。';
     return;
   }
-  if (!res) return;
-  const data = await res.json();
-  if (!res.ok) {
-    googleKeyStatus.textContent = `状態取得エラー: ${data.detail || 'unknown'}`;
-    return;
-  }
-  if (!data.configured) {
-    googleKeyStatus.textContent = '未設定です。APIキーを保存してください。';
-    return;
-  }
-  googleKeyStatus.textContent = `設定済み: ${data.masked}`;
+  googleKeyStatus.textContent = `設定済み(ブラウザ保存): ${maskApiKey(key)}`;
 }
 
 async function fetchPlaceTypes() {
@@ -958,6 +972,12 @@ importForm?.addEventListener('submit', async (e) => {
   importResult.textContent = '取得中...';
   const payload = Object.fromEntries(new FormData(importForm).entries());
   payload.max_results = Number(payload.max_results || 20);
+  payload.api_key = getStoredMapsApiKey();
+
+  if (!payload.api_key) {
+    importResult.textContent = '先にAPIキー設定で、このブラウザにAPIキーを保存してください';
+    return;
+  }
 
   const res = await apiFetch('/api/import/google-places', {
     method: 'POST',
@@ -1224,28 +1244,15 @@ adapterForm?.addEventListener('submit', async (e) => {
 googleKeyForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
   const formData = new FormData(googleKeyForm);
-  const payload = { api_key: formData.get('api_key') };
-  let res;
-  try {
-    res = await apiFetch('/api/settings/google-maps-key', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-  } catch (err) {
-    googleKeyStatus.textContent = err instanceof Error ? `保存エラー: ${err.message}` : `保存エラー: ${String(err)}`;
-    return;
-  }
-  if (!res) return;
-  const data = await res.json();
-
-  if (!res.ok) {
-    googleKeyStatus.textContent = `保存エラー: ${data.detail || 'unknown'}`;
+  const key = String(formData.get('api_key') || '').trim();
+  if (!key) {
+    googleKeyStatus.textContent = '保存エラー: APIキーが空です';
     return;
   }
 
-  googleKeyStatus.textContent = 'APIキーを保存しました。';
-  addActivity('Google Maps APIキーを更新しました。', 'user');
+  setStoredMapsApiKey(key);
+  googleKeyStatus.textContent = `APIキーをブラウザに保存しました: ${maskApiKey(key)}`;
+  addActivity('Google Maps APIキーをブラウザに保存しました。', 'user');
   googleKeyForm.reset();
   await fetchGoogleKeyStatus();
 });

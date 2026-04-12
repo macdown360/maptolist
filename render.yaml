@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: maptolist-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: DISABLE_GOOGLE_LOGIN
+        value: "false"
+      - key: CORS_ALLOW_ORIGINS
+        value: https://macdown360.github.io
+      - key: DB_PATH
+        value: /opt/render/project/src/maptolist.db
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
