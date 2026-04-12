@@ -23,9 +23,13 @@ const activityFeed = document.querySelector('#activity-feed');
 const tbody = document.querySelector('#lead-table tbody');
 const categorySelect = document.querySelector('select[name="category"]');
 const industrySelect = document.querySelector('select[name="industry"]');
+const placeTypeSelect = document.querySelector('#place-type-select');
+const placeTypeFilterInput = document.querySelector('#place-type-filter');
+const importQueryInput = document.querySelector('#import-form input[name="query"]');
 const selectAll = document.querySelector('#select-all');
 
 let currentItems = [];
+let placeTypeItems = [];
 
 // 401が返ったらログインページへ
 async function apiFetch(url, options = {}) {
@@ -186,6 +190,85 @@ async function fetchGoogleKeyStatus() {
   googleKeyStatus.textContent = `設定済み: ${data.masked}`;
 }
 
+async function fetchPlaceTypes() {
+  if (!placeTypeSelect) return;
+  const res = await apiFetch('/api/place-types');
+  if (!res) return;
+  const data = await res.json();
+  if (!res.ok) {
+    addActivity(`業種プリセット取得失敗: ${data.detail || 'error'}`, 'system');
+    return;
+  }
+
+  placeTypeItems = data.items || [];
+  renderPlaceTypeOptions(placeTypeItems, '');
+}
+
+function renderPlaceTypeOptions(items, selectedValue = '') {
+  if (!placeTypeSelect) return;
+
+  const grouped = new Map();
+  for (const item of items) {
+    const industry = item.industry || '未分類';
+    if (!grouped.has(industry)) {
+      grouped.set(industry, []);
+    }
+    grouped.get(industry).push(item);
+  }
+
+  let html = '<option value="">すべて</option>';
+  for (const [industry, groupedItems] of grouped.entries()) {
+    const opts = groupedItems
+      .map((item) => {
+        const value = escapeHtml(item.value || '');
+        const label = escapeHtml(item.label || item.value || '');
+        const suffix = item.recommended ? ' ★' : '';
+        return `<option value="${value}" data-label="${label}">${label}${suffix}</option>`;
+      })
+      .join('');
+    html += `<optgroup label="${escapeHtml(industry)}">${opts}</optgroup>`;
+  }
+
+  placeTypeSelect.innerHTML = html;
+
+  const exists = selectedValue && items.some((x) => x.value === selectedValue);
+  placeTypeSelect.value = exists ? selectedValue : '';
+}
+
+function applyPlaceTypeFilter() {
+  if (!placeTypeFilterInput || !placeTypeSelect) return;
+  const selectedValue = placeTypeSelect.value;
+  const keyword = placeTypeFilterInput.value.trim().toLowerCase();
+  if (!keyword) {
+    renderPlaceTypeOptions(placeTypeItems, selectedValue);
+    return;
+  }
+
+  const filtered = placeTypeItems.filter((item) => {
+    const label = String(item.label || '').toLowerCase();
+    const value = String(item.value || '').toLowerCase();
+    const industry = String(item.industry || '').toLowerCase();
+    return label.includes(keyword) || value.includes(keyword) || industry.includes(keyword);
+  });
+  renderPlaceTypeOptions(filtered, selectedValue);
+}
+
+if (placeTypeSelect && importQueryInput) {
+  placeTypeSelect.addEventListener('change', () => {
+    if (importQueryInput.value.trim()) return;
+    const selected = placeTypeSelect.selectedOptions?.[0];
+    if (!selected || !selected.value) return;
+    const label = selected.dataset.label || selected.textContent?.replace(' ★', '') || '';
+    if (label) {
+      importQueryInput.value = label;
+    }
+  });
+}
+
+if (placeTypeFilterInput) {
+  placeTypeFilterInput.addEventListener('input', applyPlaceTypeFilter);
+}
+
 importForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   importResult.textContent = '取得中...';
@@ -205,7 +288,8 @@ importForm.addEventListener('submit', async (e) => {
     return;
   }
 
-  importResult.textContent = `取得完了: ${data.imported}件`;
+  const selectedTypeLabel = placeTypeSelect?.selectedOptions?.[0]?.textContent || 'すべて';
+  importResult.textContent = `取得完了: ${data.imported}件 (業種: ${selectedTypeLabel})`;
   addActivity(`取り込み完了: ${data.imported}件`, 'user');
   await fetchLeads();
 });
@@ -383,3 +467,4 @@ selectAll.addEventListener('change', (e) => {
 addActivity('ワークスペースを初期化しました。左メニューから操作を選択してください。', 'system');
 fetchLeads();
 fetchGoogleKeyStatus();
+fetchPlaceTypes();

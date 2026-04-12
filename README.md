@@ -1,6 +1,6 @@
 # AutoSales Lead Collector (MVP)
 
-Google Places APIを使って、工事会社・工務店・行政書士などの企業情報を収集し、
+Google Places APIを使って、幅広い業種・業態の企業情報を収集し、
 一覧表示・フィルタ・メール連絡を行うMVPです。
 
 ## できること
@@ -11,7 +11,7 @@ Google Places APIを使って、工事会社・工務店・行政書士などの
 - 選択企業に対してメール送信（初期設定はdry-run）
 - 問い合わせフォーム送信アダプタ（対応サイトを限定して段階導入）
 - 配信停止管理 / 日次送信上限 / 監査ログ
-- 分類辞書 + ルール + 手動タグ編集
+- Google Placesのtypeを使った業種/業界分類 + 手動タグ編集
 
 ## 取得項目
 
@@ -20,7 +20,7 @@ Google Places APIを使って、工事会社・工務店・行政書士などの
 - 電話番号
 - メールアドレス（公式サイトから抽出できた場合のみ）
 - 住所
-- 業種 / 業界（簡易分類）
+- 業種 / 業界（Google Places typeベース分類）
 
 ## セットアップ
 
@@ -82,7 +82,8 @@ Codespaces / Dev Container では、`PORTS` タブで `8000` を `Open in Browse
 8. `GOOGLE_MAPS_API_KEY` 入力欄にキーを貼り付けて保存
 9. 画面に `設定済み: xxxxxx...xxxx` が表示されることを確認
 10. 左メニュー `データ取得` で次を入力してテスト取り込み
-	- キーワード例: `工務店 東京`
+	- キーワード例: `カフェ 東京` / `自動車整備 横浜` / `税理士 大阪`
+	- 業種プリセットは入力欄で絞り込み可能（例: カフェ, 病院, 不動産）
 	- 最大件数: `5` など小さめ
 11. 取り込み後、`企業一覧・検索` でデータが追加されていることを確認
 
@@ -102,6 +103,7 @@ Codespaces / Dev Container では、`PORTS` タブで `8000` を `Open in Browse
 
 - `POST /api/import/google-places`
 	- 企業情報をGoogle Placesから取り込み
+	- `place_type` を指定すると、選択業種のtypeを持つ企業に絞って取り込み
 - `GET /api/leads`
 	- 一覧取得（検索・フィルタ）
 - `POST /api/contact/email`

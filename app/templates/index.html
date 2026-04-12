@@ -73,7 +73,7 @@
             <div class="row">7. 必要に応じて「アプリケーションの制限」を設定する（最初は制限を弱めて疎通確認推奨）</div>
             <div class="row">8. 左メニューの「APIキー設定」でキーを入力して保存する</div>
             <div class="row">9. 「設定済み: xxxxxx...xxxx」が表示されることを確認する</div>
-            <div class="row">10. 「データ取得」で「工務店 東京」などを指定して取り込みを実行する</div>
+            <div class="row">10. 「データ取得」で「カフェ 東京」「自動車整備 横浜」などを指定して取り込みを実行する</div>
             <div class="row">11. 失敗時は監査ログとGoogle Cloudのエラー（課金、API制限、リファラ/IP制限）を確認する</div>
           </div>
         </div>
@@ -81,9 +81,16 @@
 
       <section class="view" id="view-import">
         <div class="panel">
-          <h3>Google Places 取り込み</h3>
+          <h3>Google Places 取り込み（幅広い業種対応）</h3>
           <form id="import-form" class="form-grid">
-            <label>キーワード<input name="query" required placeholder="例: 工務店 東京" /></label>
+            <label>キーワード<input name="query" required placeholder="例: 税理士 / カフェ / 自動車整備 / 不動産 東京" /></label>
+            <label>業種プリセット（任意）
+              <input id="place-type-filter" type="text" placeholder="業種名で絞り込み（例: カフェ, 病院, 不動産）" />
+              <select name="place_type" id="place-type-select">
+                <option value="">すべて</option>
+              </select>
+            </label>
+            <p class="muted">業種を選ぶと、キーワードが空の場合に自動で候補語を入力します。</p>
             <label>地域<input name="region" placeholder="例: 新宿区" /></label>
             <label>最大件数<input type="number" name="max_results" min="1" max="60" value="20" /></label>
             <button type="submit">取得開始</button>

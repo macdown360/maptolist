@@ -32,20 +32,188 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
 SESSION_SECRET = os.getenv("SESSION_SECRET", secrets.token_hex(32))
 
-CLASSIFY_KEYWORDS: dict[str, dict[str, list[str]]] = {
-    "行政書士": {
-        "industry": "士業",
-        "keywords": ["行政書士", "認可", "許認可", "入管", "相続"],
-    },
-    "工事会社": {
-        "industry": "建設",
-        "keywords": ["工事", "施工", "設備", "電気工事", "配管", "塗装", "解体", "防水"],
-    },
-    "工務店": {
-        "industry": "住宅",
-        "keywords": ["工務店", "注文住宅", "リフォーム", "新築", "住宅", "設計事務所"],
-    },
+PLACE_TYPE_LABELS: dict[str, str] = {
+    "accounting": "会計事務所",
+    "airport": "空港",
+    "amusement_park": "遊園地",
+    "aquarium": "水族館",
+    "art_gallery": "美術館",
+    "atm": "ATM",
+    "bakery": "ベーカリー",
+    "bank": "銀行",
+    "bar": "バー",
+    "beauty_salon": "美容サロン",
+    "bicycle_store": "自転車店",
+    "book_store": "書店",
+    "bowling_alley": "ボウリング場",
+    "bus_station": "バス停",
+    "cafe": "カフェ",
+    "car_dealer": "カーディーラー",
+    "car_rental": "レンタカー",
+    "car_repair": "自動車整備",
+    "car_wash": "洗車",
+    "clothing_store": "衣料品店",
+    "convenience_store": "コンビニ",
+    "courthouse": "裁判所",
+    "dentist": "歯科",
+    "department_store": "百貨店",
+    "doctor": "医院",
+    "drugstore": "ドラッグストア",
+    "electrician": "電気工事",
+    "electronics_store": "家電店",
+    "embassy": "大使館",
+    "florist": "花屋",
+    "funeral_home": "葬儀社",
+    "furniture_store": "家具店",
+    "gas_station": "ガソリンスタンド",
+    "general_contractor": "総合工事",
+    "gym": "ジム",
+    "hair_care": "ヘアサロン",
+    "hardware_store": "ホームセンター",
+    "hospital": "病院",
+    "hotel": "ホテル",
+    "insurance_agency": "保険代理店",
+    "jewelry_store": "宝飾店",
+    "laundry": "クリーニング",
+    "lawyer": "法律事務所",
+    "library": "図書館",
+    "local_government_office": "行政機関",
+    "lodging": "宿泊施設",
+    "meal_delivery": "宅配",
+    "meal_takeaway": "テイクアウト",
+    "movie_theater": "映画館",
+    "museum": "博物館",
+    "night_club": "ナイトクラブ",
+    "painter": "塗装業",
+    "park": "公園",
+    "parking": "駐車場",
+    "pet_store": "ペットショップ",
+    "pharmacy": "薬局",
+    "physiotherapist": "整体・リハビリ",
+    "plumber": "配管工事",
+    "police": "警察",
+    "post_office": "郵便局",
+    "real_estate_agency": "不動産",
+    "restaurant": "レストラン",
+    "roofing_contractor": "屋根工事",
+    "rv_park": "RVパーク",
+    "school": "学校",
+    "shoe_store": "靴店",
+    "shopping_mall": "ショッピングモール",
+    "spa": "スパ",
+    "stadium": "スタジアム",
+    "storage": "倉庫",
+    "store": "小売店",
+    "subway_station": "地下鉄駅",
+    "supermarket": "スーパーマーケット",
+    "taxi_stand": "タクシー乗り場",
+    "tourist_attraction": "観光地",
+    "train_station": "駅",
+    "travel_agency": "旅行代理店",
+    "university": "大学",
+    "veterinary_care": "動物病院",
+    "zoo": "動物園",
 }
+
+PLACE_INDUSTRY_MAP: dict[str, str] = {
+    "accounting": "専門サービス",
+    "lawyer": "専門サービス",
+    "insurance_agency": "金融・保険",
+    "bank": "金融・保険",
+    "atm": "金融・保険",
+    "general_contractor": "建設・不動産",
+    "roofing_contractor": "建設・不動産",
+    "electrician": "建設・不動産",
+    "plumber": "建設・不動産",
+    "painter": "建設・不動産",
+    "real_estate_agency": "建設・不動産",
+    "car_dealer": "自動車",
+    "car_repair": "自動車",
+    "car_rental": "自動車",
+    "car_wash": "自動車",
+    "gas_station": "自動車",
+    "restaurant": "飲食",
+    "cafe": "飲食",
+    "bar": "飲食",
+    "bakery": "飲食",
+    "meal_delivery": "飲食",
+    "meal_takeaway": "飲食",
+    "hospital": "医療・ヘルスケア",
+    "doctor": "医療・ヘルスケア",
+    "dentist": "医療・ヘルスケア",
+    "pharmacy": "医療・ヘルスケア",
+    "physiotherapist": "医療・ヘルスケア",
+    "veterinary_care": "医療・ヘルスケア",
+    "beauty_salon": "美容・生活",
+    "hair_care": "美容・生活",
+    "spa": "美容・生活",
+    "laundry": "美容・生活",
+    "department_store": "小売",
+    "shopping_mall": "小売",
+    "supermarket": "小売",
+    "convenience_store": "小売",
+    "clothing_store": "小売",
+    "book_store": "小売",
+    "electronics_store": "小売",
+    "pet_store": "小売",
+    "shoe_store": "小売",
+    "furniture_store": "小売",
+    "hotel": "観光・宿泊",
+    "lodging": "観光・宿泊",
+    "travel_agency": "観光・宿泊",
+    "tourist_attraction": "観光・宿泊",
+    "museum": "観光・宿泊",
+    "art_gallery": "観光・宿泊",
+    "movie_theater": "観光・娯楽",
+    "night_club": "観光・娯楽",
+    "amusement_park": "観光・娯楽",
+    "aquarium": "観光・娯楽",
+    "zoo": "観光・娯楽",
+    "gym": "スポーツ",
+    "stadium": "スポーツ",
+    "school": "教育",
+    "university": "教育",
+    "library": "教育",
+    "airport": "交通・公共",
+    "train_station": "交通・公共",
+    "subway_station": "交通・公共",
+    "bus_station": "交通・公共",
+    "taxi_stand": "交通・公共",
+    "post_office": "交通・公共",
+    "local_government_office": "公共",
+    "courthouse": "公共",
+    "police": "公共",
+    "embassy": "公共",
+    "florist": "生活サービス",
+    "funeral_home": "生活サービス",
+    "storage": "物流・インフラ",
+    "parking": "物流・インフラ",
+    "rv_park": "観光・宿泊",
+    "hardware_store": "小売",
+    "jewelry_store": "小売",
+    "drugstore": "小売",
+    "bicycle_store": "小売",
+    "store": "小売",
+}
+
+TYPE_PRIORITY: list[str] = [
+    "car_dealer",
+    "car_repair",
+    "general_contractor",
+    "real_estate_agency",
+    "lawyer",
+    "accounting",
+    "restaurant",
+    "cafe",
+    "hospital",
+    "hotel",
+    "shopping_mall",
+    "supermarket",
+    "school",
+    "university",
+    "airport",
+    "train_station",
+]
 
 app = FastAPI(title="AutoSales Lead Collector", version="0.3.0")
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, max_age=86400 * 30, https_only=False)
@@ -67,8 +235,9 @@ oauth.register(
 
 
 class ImportRequest(BaseModel):
-    query: str = Field(..., description="検索キーワード。例: 工務店 東京")
+    query: str = Field(..., description="検索キーワード。例: カフェ 東京")
     region: str = Field("", description="任意。地域キーワード")
+    place_type: str = Field("", description="任意。Google Placesの業種タイプ")
     language: str = Field("ja", description="Google Places API language")
     max_results: int = Field(20, ge=1, le=60, description="取得件数上限")
 
@@ -625,14 +794,46 @@ async def import_google_places(payload: ImportRequest, user: CurrentUser) -> dic
     if payload.region.strip():
         query = f"{query} {payload.region.strip()}"
 
-    items = await fetch_places(query=query, language=payload.language, max_results=payload.max_results, api_key=api_key)
+    place_type = payload.place_type.strip().lower()
+    if place_type and place_type not in PLACE_TYPE_LABELS:
+        raise HTTPException(status_code=400, detail="未対応の業種タイプです")
+
+    items = await fetch_places(
+        query=query,
+        language=payload.language,
+        max_results=payload.max_results,
+        api_key=api_key,
+        place_type=place_type,
+    )
     saved = 0
     for item in items:
         upsert_lead(item, user_id=user["id"])
         saved += 1
 
-    log_audit("import_google_places", "lead", "bulk", {"query": query, "saved": saved}, actor=user["email"])
+    log_audit(
+        "import_google_places",
+        "lead",
+        "bulk",
+        {"query": query, "place_type": place_type, "saved": saved},
+        actor=user["email"],
+    )
     return {"imported": saved, "total_fetched": len(items)}
+
+
+@app.get("/api/place-types")
+def list_place_types(user: CurrentUser) -> dict[str, Any]:
+    recommended_set = set(TYPE_PRIORITY)
+    items = [
+        {
+            "value": place_type,
+            "label": label,
+            "industry": PLACE_INDUSTRY_MAP.get(place_type, "未分類"),
+            "recommended": place_type in recommended_set,
+        }
+        for place_type, label in PLACE_TYPE_LABELS.items()
+    ]
+    items.sort(key=lambda x: (x["industry"], 0 if x["recommended"] else 1, x["label"]))
+    return {"items": items}
 
 
 @app.post("/api/contact/email")
@@ -962,7 +1163,13 @@ def get_audit_logs(user: CurrentUser, limit: int = Query(50, ge=1, le=500)) -> d
     return {"items": [dict(r) for r in rows]}
 
 
-async def fetch_places(query: str, language: str, max_results: int, api_key: str) -> list[dict[str, Any]]:
+async def fetch_places(
+    query: str,
+    language: str,
+    max_results: int,
+    api_key: str,
+    place_type: str = "",
+) -> list[dict[str, Any]]:
     search_url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
     details_url = "https://maps.googleapis.com/maps/api/place/details/json"
 
@@ -994,10 +1201,14 @@ async def fetch_places(query: str, language: str, max_results: int, api_key: str
                 detail_resp = await client.get(details_url, params=detail_params)
                 detail_resp.raise_for_status()
                 detail_data = detail_resp.json().get("result", {})
+                detail_types = [t.strip().lower() for t in detail_data.get("types", []) if t and t.strip()]
+
+                if place_type and place_type not in detail_types:
+                    continue
 
                 website = detail_data.get("website", "")
                 email = await extract_email_from_website(client, website)
-                category, industry = classify_business(detail_data.get("types", []), place.get("name", ""), website)
+                category, industry = classify_business(detail_types, place.get("name", ""), website)
 
                 places.append(
                     {
@@ -1009,7 +1220,7 @@ async def fetch_places(query: str, language: str, max_results: int, api_key: str
                         "address": detail_data.get("formatted_address") or place.get("formatted_address", ""),
                         "rating": detail_data.get("rating"),
                         "user_ratings_total": detail_data.get("user_ratings_total"),
-                        "raw_types": ",".join(detail_data.get("types", [])),
+                        "raw_types": ",".join(detail_types),
                         "category": category,
                         "industry": industry,
                     }
@@ -1043,29 +1254,41 @@ async def extract_email_from_website(client: httpx.AsyncClient, website: str) ->
 
 
 def classify_business(types: list[str], name: str, website: str = "") -> tuple[str, str]:
-    tset = set(types)
+    normalized_types = [t.strip().lower() for t in types if t and t.strip()]
+    unique_types: list[str] = list(dict.fromkeys(normalized_types))
+    tset = set(unique_types)
+
+    category_type = ""
+    for t in TYPE_PRIORITY:
+        if t in tset:
+            category_type = t
+            break
+    if not category_type and unique_types:
+        category_type = unique_types[0]
+
+    category = PLACE_TYPE_LABELS.get(category_type, humanize_place_type(category_type)) if category_type else "その他"
+
+    industry = "未分類"
+    for t in unique_types:
+        if t in PLACE_INDUSTRY_MAP:
+            industry = PLACE_INDUSTRY_MAP[t]
+            break
+
+    # Places typeが付かないケース向けの最小フォールバック
     text = f"{name} {website}".lower()
+    if industry == "未分類":
+        if "行政書士" in text:
+            return "行政書士", "専門サービス"
+        if "工務店" in text or "施工" in text:
+            return "工務店", "建設・不動産"
 
-    if "lawyer" in tset or "行政書士" in text:
-        return "行政書士", "士業"
-    if "general_contractor" in tset or "roofing_contractor" in tset or "plumber" in tset:
-        return "工事会社", "建設"
+    return category, industry
 
-    best_category = "その他"
-    best_industry = "未分類"
-    best_score = 0
 
-    for category, rule in CLASSIFY_KEYWORDS.items():
-        score = 0
-        for kw in rule["keywords"]:
-            if kw.lower() in text:
-                score += 1
-        if score > best_score:
-            best_score = score
-            best_category = category
-            best_industry = str(rule["industry"])
-
-    return best_category, best_industry
+def humanize_place_type(type_name: str) -> str:
+    if not type_name:
+        return "その他"
+    return type_name.replace("_", " ").title()
 
 
 def render_form_payload(payload_template: Any, vars_map: dict[str, str]) -> Any:
