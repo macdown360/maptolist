@@ -13,7 +13,7 @@ services:
       - key: DISABLE_GOOGLE_LOGIN
         value: "true"
       - key: CORS_ALLOW_ORIGINS
-        value: https://macdown360.github.io
+        value: https://maptolist.online,https://www.maptolist.online,https://macdown360.github.io
       - key: DB_PATH
         value: /opt/render/project/src/maptolist.db
       - key: SESSION_SECRET
