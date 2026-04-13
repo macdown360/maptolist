@@ -55,6 +55,22 @@
             <div class="row">10. 「データ取得」で「カフェ 東京」「自動車整備 横浜」などを指定して取り込みを実行する</div>
             <div class="row">11. 失敗時は監査ログとGoogle Cloudのエラー（課金、API制限、リファラ/IP制限）を確認する</div>
           </div>
+          <div class="simple-list">
+            <div class="row"><strong>よくあるエラーと対処法</strong></div>
+            <div class="row"><strong style="color: #d32f2f;">REQUEST_DENIED</strong></div>
+            <div class="row" style="margin-left: 16px;">原因: Places API が有効化されていない OR 支払い方法が登録されていない</div>
+            <div class="row" style="margin-left: 16px;">対処: Google Cloud Console → APIとサービス → ライブラリで「Places API」を有効化し、お支払いで請求先アカウントを確認する</div>
+            <div class="row"><strong style="color: #d32f2f;">PERMISSION_DENIED</strong></div>
+            <div class="row" style="margin-left: 16px;">原因: APIキーに「HTTPリファラ制限」または「IP制限」が設定されている</div>
+            <div class="row" style="margin-left: 16px;">対処: Google Cloud Console → 認証情報 → APIキーをクリック → 「アプリケーションの制限」を確認し、テスト段階は「制限なし」に変更する</div>
+            <div class="row"><strong style="color: #d32f2f;">クロスオリジン要求がブロック</strong></div>
+            <div class="row" style="margin-left: 16px;">原因: CORS設定の問題（バックエンド側）</div>
+            <div class="row" style="margin-left: 16px;">対処: アプリ管理者に確認 → 環境変数 CORS_ALLOW_ORIGINS に本番ドメインが含まれているか</div>
+            <div class="row"><strong style="color: #d32f2f;">その他のエラー</strong></div>
+            <div class="row" style="margin-left: 16px;">1. ブラウザで F12 → Network タブから /api/import/google-places をクリック</div>
+            <div class="row" style="margin-left: 16px;">2. Response でエラーメッセージを確認</div>
+            <div class="row" style="margin-left: 16px;">3. 監査ログでDEBUG情報を確認（要望時に追加可能）</div>
+          </div>
         </div>
       </section>
 
