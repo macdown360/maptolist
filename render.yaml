@@ -8,6 +8,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.11
+      - key: APP_BASE_URL
+        value: https://maptolist.online
       - key: DISABLE_GOOGLE_LOGIN
         value: "true"
       - key: CORS_ALLOW_ORIGINS
