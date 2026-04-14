@@ -360,6 +360,8 @@ function sortLeadItemsClientSide(items, sortBy, sortDir) {
   const keyMap = {
     updated_at: 'updated_at',
     address: 'address',
+    prefecture: 'prefecture',
+    city: 'city',
     name: 'name',
     category: 'effective_category',
     industry: 'effective_industry',
