@@ -399,6 +399,7 @@ td {
   background: linear-gradient(180deg, #f4f8ff, #edf4ff);
   color: #334766;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 #lead-table thead th.sortable {
@@ -483,11 +484,19 @@ td {
 #lead-table th:nth-child(8),
 #lead-table td:nth-child(8) {
   width: 70px;
+  text-align: center;
+  white-space: nowrap;
+  padding-left: 6px;
+  padding-right: 6px;
 }
 
 #lead-table th:nth-child(9),
 #lead-table td:nth-child(9) {
   width: 78px;
+  text-align: center;
+  white-space: nowrap;
+  padding-left: 6px;
+  padding-right: 6px;
 }
 
 #lead-table th:nth-child(10),
