@@ -32,11 +32,12 @@ INTERMEDIATE_DB_PATH = BASE_DIR / "mapgene.db"
 load_dotenv(BASE_DIR / ".env")
 EMAIL_REGEX = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 POSTAL_CODE_REGEX = re.compile(r"〒?\s*(\d{3})[-ー]?\s*(\d{4})")
+COUNTRY_PREFIX_REGEX = re.compile(r"^(?:日本|Japan)[、,\s　]*", re.IGNORECASE)
 PREFECTURE_REGEX = re.compile(
-    r"(北海道|(?:東京都|京都府|大阪府)|(?:.{2,3}県))"
+    r"(北海道|東京都|京都府|大阪府|(?:[^\s、,]{2,3}県))"
 )
 CITY_REGEX = re.compile(
-    r"^(.*?(?:市.*?区|市|区|町|村))"
+    r"^(.*(?:郡.*[町村]|市.*区|市|区|町|村))"
 )
 DEFAULT_DAILY_SEND_LIMIT = int(os.getenv("DAILY_SEND_LIMIT", "100"))
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
@@ -482,7 +483,7 @@ def now_iso() -> str:
 
 def split_jp_address(raw_address: str) -> dict[str, str]:
     """Split Japanese address into postal code/prefecture/city/detail for display."""
-    text = (raw_address or "").strip()
+    text = COUNTRY_PREFIX_REGEX.sub("", (raw_address or "").strip())
     postal_code = ""
     prefecture = ""
     city = ""
@@ -501,19 +502,39 @@ def split_jp_address(raw_address: str) -> dict[str, str]:
         postal_code = f"{m_postal.group(1)}-{m_postal.group(2)}"
         text = (text[:m_postal.start()] + text[m_postal.end():]).strip()
 
+    text = COUNTRY_PREFIX_REGEX.sub("", text).strip(" 、　")
+
     m_pref = PREFECTURE_REGEX.search(text)
     if m_pref:
-        prefecture = m_pref.group(1)
-        rest = text[m_pref.end():].strip()
+        prefecture = m_pref.group(1).strip(" 、　")
+        rest = text[m_pref.end():].strip(" 、　")
     else:
         rest = text
 
-    m_city = CITY_REGEX.match(rest)
-    if m_city:
-        city = m_city.group(1).strip()
-        detail = rest[m_city.end():].strip()
+    county_match = re.match(r"^(.+?郡.+?[町村])", rest)
+    if county_match:
+        city = county_match.group(1).strip(" 、　")
+        detail = rest[county_match.end():].strip(" 、　")
     else:
-        detail = rest
+        city_end = 0
+        if "市" in rest:
+            city_end = rest.rfind("市") + 1
+            ward_part = rest[city_end:]
+            ward_match = re.match(r"^([^0-9０-９丁目番地-]{1,12}?区)", ward_part)
+            if ward_match:
+                city_end += ward_match.end()
+        elif "区" in rest:
+            city_end = rest.find("区") + 1
+        elif "町" in rest:
+            city_end = rest.find("町") + 1
+        elif "村" in rest:
+            city_end = rest.find("村") + 1
+
+        if city_end:
+            city = rest[:city_end].strip(" 、　")
+            detail = rest[city_end:].strip(" 、　")
+        else:
+            detail = rest.strip(" 、　")
 
     return {
         "postal_code": postal_code,
@@ -544,16 +565,16 @@ def parse_address_components(address_components: list[dict[str, Any]]) -> dict[s
             if t_name and t_name not in by_type:
                 by_type[t_name] = long_name
 
-    postal = by_type.get("postal_code", "")
-    postal_suffix = by_type.get("postal_code_suffix", "")
+    postal = by_type.get("postal_code", "").strip()
+    postal_suffix = by_type.get("postal_code_suffix", "").strip()
     postal_code = f"{postal}-{postal_suffix}" if postal and postal_suffix else postal
 
-    prefecture = by_type.get("administrative_area_level_1", "")
+    prefecture = by_type.get("administrative_area_level_1", "").strip()
     city = (
         by_type.get("locality", "")
         or by_type.get("administrative_area_level_2", "")
         or by_type.get("sublocality_level_1", "")
-    )
+    ).strip()
 
     detail_parts: list[str] = []
     for key in [
@@ -570,7 +591,7 @@ def parse_address_components(address_components: list[dict[str, Any]]) -> dict[s
         if val:
             detail_parts.append(val)
 
-    address_detail = "".join(detail_parts)
+    address_detail = "".join(detail_parts).strip()
 
     return {
         "postal_code": postal_code,
@@ -1492,6 +1513,8 @@ async def fetch_places(
                 "language": language,
                 "key": api_key,
             }
+            if place_type and not next_page_token:
+                params["type"] = place_type
             if next_page_token:
                 await asyncio.sleep(2)
                 params = {"pagetoken": next_page_token, "key": api_key}
@@ -1522,38 +1545,73 @@ async def fetch_places(
                     continue
                 seen_place_ids.add(place_id)
 
+                detail_data: dict[str, Any] = {}
+                address_components: list[dict[str, Any]] = []
+                website = ""
+                phone = ""
+                rating = place.get("rating")
+                user_ratings_total = place.get("user_ratings_total")
+                raw_type_values = place.get("types", [])
+
                 detail_params = {
                     "place_id": place_id,
                     "fields": "name,website,formatted_phone_number,formatted_address,address_components,types,rating,user_ratings_total",
                     "language": language,
                     "key": api_key,
                 }
-                detail_resp = await client.get(details_url, params=detail_params)
-                detail_resp.raise_for_status()
-                detail_data = detail_resp.json().get("result", {})
-                detail_types = [t.strip().lower() for t in detail_data.get("types", []) if t and t.strip()]
 
+                for attempt in range(3):
+                    try:
+                        detail_resp = await client.get(details_url, params=detail_params)
+                        detail_resp.raise_for_status()
+                        detail_payload = detail_resp.json()
+                        detail_status = str(detail_payload.get("status", "OK")).upper()
+
+                        if detail_status in {"OK", ""}:
+                            detail_data = detail_payload.get("result", {}) or {}
+                            break
+
+                        if detail_status in {"OVER_QUERY_LIMIT", "UNKNOWN_ERROR"} and attempt < 2:
+                            await asyncio.sleep(1 + attempt)
+                            continue
+                        break
+                    except Exception:
+                        if attempt < 2:
+                            await asyncio.sleep(1 + attempt)
+                            continue
+                        break
+
+                if detail_data:
+                    website = str(detail_data.get("website", "") or "").strip()
+                    phone = str(detail_data.get("formatted_phone_number", "") or "").strip()
+                    rating = detail_data.get("rating", rating)
+                    user_ratings_total = detail_data.get("user_ratings_total", user_ratings_total)
+                    raw_type_values = detail_data.get("types", raw_type_values)
+                    address_components = detail_data.get("address_components", [])
+                    if not isinstance(address_components, list):
+                        address_components = []
+
+                detail_types = [t.strip().lower() for t in raw_type_values if t and str(t).strip()]
                 if place_type and place_type not in detail_types:
                     continue
 
-                website = detail_data.get("website", "")
                 email = await extract_email_from_website(client, website)
                 category, industry = classify_business(detail_types, place.get("name", ""), website)
-                address_components = detail_data.get("address_components", [])
-                if not isinstance(address_components, list):
-                    address_components = []
+                address = detail_data.get("formatted_address") or place.get("formatted_address", "")
                 address_parts = parse_address_components(address_components)
+                if not any(address_parts.values()):
+                    address_parts = split_jp_address(address)
 
                 places.append(
                     {
                         "name": detail_data.get("name") or place.get("name", ""),
                         "place_id": place_id,
                         "website": website,
-                        "phone": detail_data.get("formatted_phone_number", ""),
+                        "phone": phone,
                         "email": email,
-                        "address": detail_data.get("formatted_address") or place.get("formatted_address", ""),
-                        "rating": detail_data.get("rating"),
-                        "user_ratings_total": detail_data.get("user_ratings_total"),
+                        "address": address,
+                        "rating": rating,
+                        "user_ratings_total": user_ratings_total,
                         "raw_types": ",".join(detail_types),
                         "category": category,
                         "industry": industry,
