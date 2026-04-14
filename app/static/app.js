@@ -65,6 +65,8 @@ let placeTypeItems = [];
 let leadSortBy = 'updated_at';
 let leadSortDir = 'desc';
 const MAPS_KEY_STORAGE_KEY = 'maptolist.google_maps_api_key';
+const LEADS_CACHE_STORAGE_KEY = 'maptolist.leads_cache.v1';
+const LEADS_FILTER_STORAGE_KEY = 'maptolist.leads_filter.v1';
 const API_BASE_URL = String(window.__API_BASE_URL || '').trim().replace(/\/$/, '');
 const IS_GITHUB_PAGES = window.location.hostname.endsWith('github.io');
 const IS_PLACEHOLDER_API_BASE_URL = API_BASE_URL === 'https://YOUR-BACKEND-URL';
@@ -129,6 +131,23 @@ function setStoredMapsApiKey(value) {
     } else {
       window.localStorage.removeItem(MAPS_KEY_STORAGE_KEY);
     }
+  } catch {
+    // noop
+  }
+}
+
+function getStoredJson(key, fallback) {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function setStoredJson(key, value) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
   } catch {
     // noop
   }
@@ -232,6 +251,49 @@ function renderOptions(select, items, selected) {
   const options = items.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
   select.innerHTML = base + options;
   select.value = selected || '';
+}
+
+function persistLeadListState(items = currentItems) {
+  const safeItems = Array.isArray(items) ? items : [];
+  setStoredJson(LEADS_CACHE_STORAGE_KEY, {
+    items: safeItems,
+    sortBy: leadSortBy,
+    sortDir: leadSortDir,
+    savedAt: new Date().toISOString(),
+  });
+
+  if (!filterForm) return;
+  const formData = new FormData(filterForm);
+  setStoredJson(LEADS_FILTER_STORAGE_KEY, {
+    q: String(formData.get('q') || ''),
+    category: String(formData.get('category') || ''),
+    industry: String(formData.get('industry') || ''),
+    sortBy: leadSortBy,
+    sortDir: leadSortDir,
+  });
+}
+
+function hydrateLeadListState() {
+  if (filterForm) {
+    const filters = getStoredJson(LEADS_FILTER_STORAGE_KEY, {});
+    const qInput = filterForm.querySelector('input[name="q"]');
+    const categoryInput = filterForm.querySelector('select[name="category"]');
+    const industryInput = filterForm.querySelector('select[name="industry"]');
+
+    if (qInput && typeof filters.q === 'string') qInput.value = filters.q;
+    if (categoryInput && typeof filters.category === 'string') categoryInput.value = filters.category;
+    if (industryInput && typeof filters.industry === 'string') industryInput.value = filters.industry;
+    if (typeof filters.sortBy === 'string' && filters.sortBy) leadSortBy = filters.sortBy;
+    if (typeof filters.sortDir === 'string' && filters.sortDir) leadSortDir = filters.sortDir;
+  }
+
+  const cached = getStoredJson(LEADS_CACHE_STORAGE_KEY, {});
+  const cachedItems = Array.isArray(cached.items) ? cached.items : [];
+  if (!cachedItems.length) return;
+
+  currentItems = sortLeadItemsClientSide(cachedItems, leadSortBy, leadSortDir);
+  renderLeadsTable(currentItems);
+  updateLeadSortIndicators();
 }
 
 function renderLeadsTable(items) {
@@ -650,12 +712,31 @@ function getSelectedMyListLeadIds() {
 }
 
 async function fetchLeads() {
+  if (!filterForm) return;
+
   const params = new URLSearchParams(new FormData(filterForm));
   params.set('sort_by', leadSortBy);
   params.set('sort_dir', leadSortDir);
-  const res = await apiFetch(`/api/leads?${params.toString()}`);
-  if (!res) return;
-  const data = await res.json();
+
+  let res;
+  let data;
+  try {
+    res = await apiFetch(`/api/leads?${params.toString()}`);
+    if (!res) return;
+    data = await res.json();
+  } catch (err) {
+    const fallback = getStoredJson(LEADS_CACHE_STORAGE_KEY, {});
+    const cachedItems = Array.isArray(fallback.items) ? fallback.items : [];
+    if (cachedItems.length) {
+      currentItems = sortLeadItemsClientSide(cachedItems, leadSortBy, leadSortDir);
+      renderLeadsTable(currentItems);
+      updateLeadSortIndicators();
+      addActivity('通信エラーのため前回取得した一覧を表示しています', 'system');
+      showToast('前回取得した一覧を表示しています', 'info');
+      return;
+    }
+    throw err;
+  }
 
   if (!res.ok) {
     addActivity(`一覧取得エラー: ${data.detail || 'unknown'}`, 'system');
@@ -663,16 +744,18 @@ async function fetchLeads() {
   }
 
   currentItems = sortLeadItemsClientSide(data.items || [], leadSortBy, leadSortDir);
-  renderLeadsTable(currentItems);
   if (data.sort) {
     leadSortBy = data.sort.sort_by || leadSortBy;
     leadSortDir = data.sort.sort_dir || leadSortDir;
     currentItems = sortLeadItemsClientSide(currentItems, leadSortBy, leadSortDir);
-    renderLeadsTable(currentItems);
   }
+
+  renderLeadsTable(currentItems);
   renderOptions(categorySelect, data.filters.categories || [], filterForm.category.value);
   renderOptions(industrySelect, data.filters.industries || [], filterForm.industry.value);
   updateLeadSortIndicators();
+  persistLeadListState(currentItems);
+
   if (limitResult) {
     limitResult.textContent = `本日上限 ${data.send_limit.daily_limit}件 / email残 ${data.send_limit.email_remaining} / form残 ${data.send_limit.form_remaining}`;
   }
@@ -996,7 +1079,15 @@ importForm?.addEventListener('submit', async (e) => {
   const selectedTypeLabel = placeTypeSelect?.selectedOptions?.[0]?.textContent || 'すべて';
   importResult.textContent = `取得完了: ${data.imported}件 (業種: ${selectedTypeLabel})`;
   addActivity(`取り込み完了: ${data.imported}件`, 'user');
+
+  if (filterForm) {
+    filterForm.reset();
+  }
+  leadSortBy = 'updated_at';
+  leadSortDir = 'desc';
+  switchView('leads');
   await fetchLeads();
+  showToast('取得結果を一覧に保持しました', 'success');
 });
 
 filterForm?.addEventListener('submit', async (e) => {
@@ -1277,6 +1368,7 @@ myListSelectAll?.addEventListener('change', (e) => {
 });
 
 hydrateMyListFilterFromUrl();
+hydrateLeadListState();
 loadUserBadge();
 fetchLeads();
 fetchGoogleKeyStatus();
