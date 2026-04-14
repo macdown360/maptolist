@@ -296,11 +296,25 @@ function hydrateLeadListState() {
   updateLeadSortIndicators();
 }
 
-function formatLeadAddress(value) {
+function cleanAddressValue(value) {
   return String(value || '')
     .replace(/^日本[、\s]*/u, '')
     .replace(/^Japan[،,\s]*/iu, '')
+    .replace(/\s+/g, ' ')
     .trim();
+}
+
+function formatLeadAddress(item) {
+  if (item && (item.postal_code || item.prefecture || item.city || item.address_detail)) {
+    const postal = item.postal_code ? `〒${String(item.postal_code).trim()} ` : '';
+    const prefecture = String(item.prefecture || '').trim();
+    const city = String(item.city || '').trim();
+    const detail = String(item.address_detail || '').trim();
+    const combined = `${postal}${prefecture}${city}${detail}`.trim();
+    if (combined) return combined;
+  }
+
+  return cleanAddressValue(item?.address || '');
 }
 
 function renderLeadsTable(items) {
@@ -309,7 +323,7 @@ function renderLeadsTable(items) {
       (item) => `
       <tr>
         <td><input type="checkbox" class="lead-check" value="${item.id}" /></td>
-        <td>${escapeHtml(formatLeadAddress(item.address))}</td>
+        <td>${escapeHtml(formatLeadAddress(item))}</td>
         <td>${escapeHtml(item.prefecture || '')}</td>
         <td>${escapeHtml(item.city || '')}</td>
         <td>${escapeHtml(item.name)}</td>
@@ -594,7 +608,7 @@ function exportRowsFromLeadItems(items) {
   return items.map((item) => ({
     id: item.id,
     name: item.name || '',
-    address: formatLeadAddress(item.address || ''),
+    address: formatLeadAddress(item),
     prefecture: item.prefecture || '',
     city: item.city || '',
     category: item.effective_category || item.category || '',

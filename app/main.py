@@ -481,9 +481,34 @@ def now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def clean_address_text(raw_value: str) -> str:
+    text = COUNTRY_PREFIX_REGEX.sub("", str(raw_value or "").strip())
+    text = text.replace("　", " ")
+    text = re.sub(r"\s+", " ", text)
+    return text.strip(" 、")
+
+
+def trim_address_detail(detail: str, place_name: str = "") -> str:
+    value = clean_address_text(detail)
+    if not value:
+        return ""
+
+    m = re.match(r"^(.*?\d[0-9０-９\-−ー丁目番地号]*)\s+[^0-9０-９].*$", value)
+    if m:
+        value = m.group(1).strip()
+
+    if place_name:
+        simplified_value = re.sub(r"\s+", "", value)
+        simplified_name = re.sub(r"\s+", "", str(place_name or ""))
+        if simplified_name and simplified_value.endswith(simplified_name):
+            value = value[: max(0, len(value) - len(str(place_name).strip()))].strip(" 、")
+
+    return value.strip(" 、")
+
+
 def split_jp_address(raw_address: str) -> dict[str, str]:
     """Split Japanese address into postal code/prefecture/city/detail for display."""
-    text = COUNTRY_PREFIX_REGEX.sub("", (raw_address or "").strip())
+    text = clean_address_text(raw_address)
     postal_code = ""
     prefecture = ""
     city = ""
@@ -516,23 +541,17 @@ def split_jp_address(raw_address: str) -> dict[str, str]:
         city = county_match.group(1).strip(" 、　")
         detail = rest[county_match.end():].strip(" 、　")
     else:
-        city_end = 0
-        if "市" in rest:
-            city_end = rest.rfind("市") + 1
-            ward_part = rest[city_end:]
-            ward_match = re.match(r"^([^0-9０-９丁目番地-]{1,12}?区)", ward_part)
-            if ward_match:
-                city_end += ward_match.end()
-        elif "区" in rest:
-            city_end = rest.find("区") + 1
-        elif "町" in rest:
-            city_end = rest.find("町") + 1
-        elif "村" in rest:
-            city_end = rest.find("村") + 1
+        city_match = re.match(r"^(.+?市.+?区)", rest)
+        if not city_match:
+            city_match = re.match(r"^(.+?市)", rest)
+        if not city_match:
+            city_match = re.match(r"^(.+?区)", rest)
+        if not city_match:
+            city_match = re.match(r"^(.+?[町村])", rest)
 
-        if city_end:
-            city = rest[:city_end].strip(" 、　")
-            detail = rest[city_end:].strip(" 、　")
+        if city_match:
+            city = city_match.group(1).strip(" 、　")
+            detail = rest[city_match.end():].strip(" 、　")
         else:
             detail = rest.strip(" 、　")
 
@@ -540,7 +559,7 @@ def split_jp_address(raw_address: str) -> dict[str, str]:
         "postal_code": postal_code,
         "prefecture": prefecture,
         "city": city,
-        "address_detail": detail,
+        "address_detail": trim_address_detail(detail),
     }
 
 
@@ -569,12 +588,16 @@ def parse_address_components(address_components: list[dict[str, Any]]) -> dict[s
     postal_suffix = by_type.get("postal_code_suffix", "").strip()
     postal_code = f"{postal}-{postal_suffix}" if postal and postal_suffix else postal
 
-    prefecture = by_type.get("administrative_area_level_1", "").strip()
-    city = (
-        by_type.get("locality", "")
-        or by_type.get("administrative_area_level_2", "")
-        or by_type.get("sublocality_level_1", "")
-    ).strip()
+    prefecture = re.sub(r"\s+", "", by_type.get("administrative_area_level_1", "").strip())
+    city = re.sub(
+        r"\s+",
+        "",
+        (
+            by_type.get("locality", "")
+            or by_type.get("administrative_area_level_2", "")
+            or by_type.get("sublocality_level_1", "")
+        ).strip(),
+    )
 
     detail_parts: list[str] = []
     for key in [
@@ -591,7 +614,7 @@ def parse_address_components(address_components: list[dict[str, Any]]) -> dict[s
         if val:
             detail_parts.append(val)
 
-    address_detail = "".join(detail_parts).strip()
+    address_detail = trim_address_detail("".join(detail_parts))
 
     return {
         "postal_code": postal_code,
@@ -1006,6 +1029,8 @@ def get_leads(
     allowed_sort_columns = {
         "updated_at": "l.updated_at",
         "address": "l.address",
+        "prefecture": "TRIM(COALESCE(l.prefecture, ''))",
+        "city": "TRIM(COALESCE(l.city, ''))",
         "name": "l.name",
         "category": "COALESCE(mt.category, l.category)",
         "industry": "COALESCE(mt.industry, l.industry)",
@@ -1050,29 +1075,29 @@ def get_leads(
     for row in rows:
         item = dict(row)
         item["suppressed"] = is_suppressed(item.get("email", ""))
+        item["address"] = clean_address_text(item.get("address", ""))
 
+        resolved = split_jp_address(item.get("address", ""))
         components_json = item.get("address_components_json", "") or ""
-        resolved = {
-            "postal_code": item.get("postal_code", "") or "",
-            "prefecture": item.get("prefecture", "") or "",
-            "city": item.get("city", "") or "",
-            "address_detail": item.get("address_detail", "") or "",
-        }
-
-        if components_json and not all(resolved.values()):
+        if components_json:
             try:
                 parsed_components = json.loads(components_json)
                 if isinstance(parsed_components, list):
                     from_components = parse_address_components(parsed_components)
                     for k, v in from_components.items():
-                        if not resolved[k] and v:
+                        if v:
                             resolved[k] = v
             except json.JSONDecodeError:
                 pass
 
-        if not any(resolved.values()):
-            resolved = split_jp_address(item.get("address", ""))
+        for key in ["postal_code", "prefecture", "city", "address_detail"]:
+            stored_value = str(item.get(key, "") or "").strip()
+            if not resolved.get(key) and stored_value and stored_value not in {"市", "区", "町", "村"}:
+                resolved[key] = stored_value
 
+        resolved["prefecture"] = re.sub(r"\s+", "", str(resolved.get("prefecture", "") or "").strip())
+        resolved["city"] = re.sub(r"\s+", "", str(resolved.get("city", "") or "").strip())
+        resolved["address_detail"] = trim_address_detail(resolved.get("address_detail", ""), item.get("name", ""))
         item.update(resolved)
         items.append(item)
 
@@ -1597,10 +1622,11 @@ async def fetch_places(
 
                 email = await extract_email_from_website(client, website)
                 category, industry = classify_business(detail_types, place.get("name", ""), website)
-                address = detail_data.get("formatted_address") or place.get("formatted_address", "")
+                address = clean_address_text(detail_data.get("formatted_address") or place.get("formatted_address", ""))
                 address_parts = parse_address_components(address_components)
                 if not any(address_parts.values()):
                     address_parts = split_jp_address(address)
+                address_parts["address_detail"] = trim_address_detail(address_parts.get("address_detail", ""), place.get("name", ""))
 
                 places.append(
                     {
