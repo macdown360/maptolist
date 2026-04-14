@@ -1030,12 +1030,15 @@ def get_leads(
         sql += " AND (l.name LIKE ? OR l.address LIKE ? OR l.website LIKE ?)"
         like_q = f"%{q}%"
         params.extend([like_q, like_q, like_q])
-    if category:
-        sql += " AND COALESCE(mt.category, l.category) = ?"
-        params.append(category)
-    if industry:
-        sql += " AND COALESCE(mt.industry, l.industry) = ?"
-        params.append(industry)
+    normalized_category = category.strip()
+    normalized_industry = industry.strip()
+
+    if normalized_category:
+        sql += " AND TRIM(COALESCE(mt.category, l.category)) = ?"
+        params.append(normalized_category)
+    if normalized_industry:
+        sql += " AND TRIM(COALESCE(mt.industry, l.industry)) = ?"
+        params.append(normalized_industry)
 
     allowed_sort_columns = {
         "updated_at": "l.updated_at {dir}, l.id DESC",

@@ -100,6 +100,10 @@ const LOG_STATUS_LABELS = {
   no_adapter: 'アダプタなし',
 };
 
+const CATEGORY_LABELS = {
+  Establishment: '施設・事業所',
+};
+
 function toStatusLabel(value) {
   return STATUS_LABELS[value] || value || '';
 }
@@ -114,6 +118,10 @@ function toChannelLabel(value) {
 
 function toLogStatusLabel(value) {
   return LOG_STATUS_LABELS[value] || value || '';
+}
+
+function toCategoryLabel(value) {
+  return CATEGORY_LABELS[value] || value || '';
 }
 
 function getStoredMapsApiKey() {
@@ -245,12 +253,20 @@ function escapeHtml(str) {
     .replaceAll("'", '&#039;');
 }
 
-function renderOptions(select, items, selected) {
+function renderOptions(select, items, selected, labelFormatter = (v) => v) {
   if (!select) return;
+  const values = Array.from(new Set((items || []).filter((v) => String(v || '').trim() !== '')));
+  const selectedValue = String(selected || '').trim();
+  if (selectedValue && !values.includes(selectedValue)) {
+    values.unshift(selectedValue);
+  }
+
   const base = '<option value="">すべて</option>';
-  const options = items.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  const options = values
+    .map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(labelFormatter(v))}</option>`)
+    .join('');
   select.innerHTML = base + options;
-  select.value = selected || '';
+  select.value = selectedValue;
 }
 
 function persistLeadListState(items = currentItems) {
@@ -318,6 +334,15 @@ function formatLeadAddress(item) {
 }
 
 function renderLeadsTable(items) {
+  if (!Array.isArray(items) || !items.length) {
+    leadsTbody.innerHTML = `
+      <tr>
+        <td colspan="12" class="muted">該当する取得結果はありません。業種・業界の条件を見直してください。</td>
+      </tr>
+    `;
+    return;
+  }
+
   leadsTbody.innerHTML = items
     .map(
       (item) => `
@@ -327,7 +352,7 @@ function renderLeadsTable(items) {
         <td>${escapeHtml(item.prefecture || '')}</td>
         <td>${escapeHtml(item.city || '')}</td>
         <td>${escapeHtml(item.name)}</td>
-        <td>${escapeHtml(item.effective_category || item.category)}</td>
+        <td>${escapeHtml(toCategoryLabel(item.effective_category || item.category))}</td>
         <td>${escapeHtml(item.effective_industry || item.industry)}</td>
         <td>${item.rating ?? ''}</td>
         <td>${item.user_ratings_total ?? ''}</td>
@@ -613,7 +638,7 @@ function exportRowsFromLeadItems(items) {
     address: formatLeadAddress(item),
     prefecture: item.prefecture || '',
     city: item.city || '',
-    category: item.effective_category || item.category || '',
+    category: toCategoryLabel(item.effective_category || item.category || ''),
     industry: item.effective_industry || item.industry || '',
     rating: item.rating ?? '',
     user_ratings_total: item.user_ratings_total ?? '',
@@ -786,10 +811,14 @@ async function fetchLeads() {
   }
 
   renderLeadsTable(currentItems);
-  renderOptions(categorySelect, data.filters.categories || [], filterForm.category.value);
+  renderOptions(categorySelect, data.filters.categories || [], filterForm.category.value, toCategoryLabel);
   renderOptions(industrySelect, data.filters.industries || [], filterForm.industry.value);
   updateLeadSortIndicators();
   persistLeadListState(currentItems);
+
+  if (exportResult) {
+    exportResult.textContent = `${currentItems.length}件表示中`;
+  }
 
   if (limitResult) {
     limitResult.textContent = `本日上限 ${data.send_limit.daily_limit}件 / email残 ${data.send_limit.email_remaining} / form残 ${data.send_limit.form_remaining}`;
