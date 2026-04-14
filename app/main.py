@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import json
 import os
@@ -1481,6 +1482,8 @@ async def fetch_places(
 
     places: list[dict[str, Any]] = []
     next_page_token = ""
+    next_page_attempts = 0
+    seen_place_ids: set[str] = set()
 
     async with httpx.AsyncClient(timeout=20) as client:
         while len(places) < max_results:
@@ -1490,16 +1493,37 @@ async def fetch_places(
                 "key": api_key,
             }
             if next_page_token:
+                await asyncio.sleep(2)
                 params = {"pagetoken": next_page_token, "key": api_key}
 
             response = await client.get(search_url, params=params)
             response.raise_for_status()
             data = response.json()
+            status = str(data.get("status", "OK")).upper()
 
+            if status == "INVALID_REQUEST" and next_page_token:
+                next_page_attempts += 1
+                if next_page_attempts < 4:
+                    continue
+                raise HTTPException(
+                    status_code=502,
+                    detail="Google Places の次ページ取得に失敗しました。少し待って再試行してください。",
+                )
+
+            if status not in {"OK", "ZERO_RESULTS"}:
+                detail = data.get("error_message") or status
+                raise HTTPException(status_code=502, detail=f"Google Places API error: {detail}")
+
+            next_page_attempts = 0
             results = data.get("results", [])
             for place in results:
+                place_id = str(place.get("place_id", "")).strip()
+                if not place_id or place_id in seen_place_ids:
+                    continue
+                seen_place_ids.add(place_id)
+
                 detail_params = {
-                    "place_id": place.get("place_id"),
+                    "place_id": place_id,
                     "fields": "name,website,formatted_phone_number,formatted_address,address_components,types,rating,user_ratings_total",
                     "language": language,
                     "key": api_key,
@@ -1523,7 +1547,7 @@ async def fetch_places(
                 places.append(
                     {
                         "name": detail_data.get("name") or place.get("name", ""),
-                        "place_id": place.get("place_id", ""),
+                        "place_id": place_id,
                         "website": website,
                         "phone": detail_data.get("formatted_phone_number", ""),
                         "email": email,
@@ -1543,7 +1567,7 @@ async def fetch_places(
                 if len(places) >= max_results:
                     break
 
-            next_page_token = data.get("next_page_token", "")
+            next_page_token = str(data.get("next_page_token", "")).strip()
             if not next_page_token:
                 break
 
