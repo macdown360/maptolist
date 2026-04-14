@@ -218,6 +218,20 @@ class FetchPlacesPaginationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(row["user_ratings_total"], 12)
             self.assertEqual(row["user_id"], 1)
 
+    def test_upsert_lead_appends_new_unique_places(self):
+        with tempfile.TemporaryDirectory() as tmpdir, patch("app.main.DB_PATH", Path(tmpdir) / "test.db"):
+            init_db()
+            created1 = upsert_lead({"name": "A", "place_id": "p1"}, user_id=1)
+            created2 = upsert_lead({"name": "B", "place_id": "p2"}, user_id=1)
+
+            conn = sqlite3.connect(Path(tmpdir) / "test.db")
+            count = conn.execute("select count(*) from leads").fetchone()[0]
+            conn.close()
+
+            self.assertTrue(created1)
+            self.assertTrue(created2)
+            self.assertEqual(count, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

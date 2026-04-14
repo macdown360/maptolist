@@ -269,6 +269,20 @@ function renderOptions(select, items, selected, labelFormatter = (v) => v) {
   select.value = selectedValue;
 }
 
+function mergeLeadItems(existingItems = [], incomingItems = []) {
+  const merged = new Map();
+  for (const item of existingItems || []) {
+    const key = String(item.place_id || item.id || '');
+    if (key) merged.set(key, item);
+  }
+  for (const item of incomingItems || []) {
+    const key = String(item.place_id || item.id || '');
+    if (!key) continue;
+    merged.set(key, { ...(merged.get(key) || {}), ...item });
+  }
+  return Array.from(merged.values());
+}
+
 function persistLeadListState(items = currentItems) {
   const safeItems = Array.isArray(items) ? items : [];
   setStoredJson(LEADS_CACHE_STORAGE_KEY, {
@@ -1141,8 +1155,15 @@ importForm?.addEventListener('submit', async (e) => {
   }
 
   const selectedTypeLabel = placeTypeSelect?.selectedOptions?.[0]?.textContent || 'すべて';
-  importResult.textContent = `取得完了: ${data.imported}件 (業種: ${selectedTypeLabel})`;
-  addActivity(`取り込み完了: ${data.imported}件`, 'user');
+  importResult.textContent = `取得完了: ${data.imported}件 / 新規追加: ${data.added || 0}件 / 更新: ${data.updated || 0}件 (業種: ${selectedTypeLabel})`;
+  addActivity(`取り込み完了: 新規${data.added || 0}件 / 更新${data.updated || 0}件`, 'user');
+
+  const incomingItems = Array.isArray(data.items) ? data.items : [];
+  if (incomingItems.length) {
+    currentItems = sortLeadItemsClientSide(mergeLeadItems(currentItems, incomingItems), leadSortBy, leadSortDir);
+    renderLeadsTable(currentItems);
+    persistLeadListState(currentItems);
+  }
 
   if (filterForm) {
     filterForm.reset();
@@ -1151,7 +1172,7 @@ importForm?.addEventListener('submit', async (e) => {
   leadSortDir = 'desc';
   switchView('leads');
   await fetchLeads();
-  showToast('取得結果を一覧に保持しました', 'success');
+  showToast('前回結果を残したまま一覧へ追加しました', 'success');
 });
 
 filterForm?.addEventListener('submit', async (e) => {

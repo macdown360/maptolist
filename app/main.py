@@ -1175,18 +1175,24 @@ async def import_google_places(payload: ImportRequest, user: CurrentUser) -> dic
         place_type=place_type,
     )
     saved = 0
+    added = 0
+    updated = 0
     for item in items:
-        upsert_lead(item, user_id=user["id"])
+        created = upsert_lead(item, user_id=user["id"])
+        if created:
+            added += 1
+        else:
+            updated += 1
         saved += 1
 
     log_audit(
         "import_google_places",
         "lead",
         "bulk",
-        {"query": query, "place_type": place_type, "saved": saved},
+        {"query": query, "place_type": place_type, "saved": saved, "added": added, "updated": updated},
         actor=user["email"],
     )
-    return {"imported": saved, "total_fetched": len(items)}
+    return {"imported": saved, "added": added, "updated": updated, "total_fetched": len(items), "items": items}
 
 
 @app.get("/api/place-types")
@@ -1756,9 +1762,13 @@ def render_contact_body_template(body: str, lead: dict[str, Any]) -> str:
     return out
 
 
-def upsert_lead(item: dict[str, Any], user_id: int | None = None) -> None:
+def upsert_lead(item: dict[str, Any], user_id: int | None = None) -> bool:
     now = now_iso()
     with sqlite3.connect(DB_PATH) as conn:
+        existing = conn.execute(
+            "SELECT id FROM leads WHERE place_id = ?",
+            (item.get("place_id", ""),),
+        ).fetchone()
         conn.execute(
             """
             INSERT INTO leads (name, place_id, website, phone, email, address, category, industry, rating, user_ratings_total, raw_types, postal_code, prefecture, city, address_detail, address_components_json, user_id, created_at, updated_at)
@@ -1804,6 +1814,7 @@ def upsert_lead(item: dict[str, Any], user_id: int | None = None) -> None:
                 now,
             ),
         )
+    return existing is None
 
 
 def save_contact_log(lead_id: int, channel: str, status: str, subject: str, message: str) -> None:
