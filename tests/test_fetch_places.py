@@ -1,8 +1,11 @@
+import sqlite3
+import tempfile
 import types
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
-from app.main import fetch_places, split_jp_address
+from app.main import fetch_places, init_db, split_jp_address, upsert_lead
 
 
 class FakeResponse:
@@ -166,6 +169,54 @@ class FetchPlacesPaginationTests(unittest.IsolatedAsyncioTestCase):
         parts = split_jp_address("日本、〒272-0023 千葉県市川市南八幡４丁目２−５")
         self.assertEqual(parts["prefecture"].strip(), "千葉県")
         self.assertEqual(parts["city"].strip(), "市川市")
+
+    def test_upsert_lead_preserves_existing_values_when_new_data_is_blank(self):
+        with tempfile.TemporaryDirectory() as tmpdir, patch("app.main.DB_PATH", Path(tmpdir) / "test.db"):
+            init_db()
+            upsert_lead(
+                {
+                    "name": "Office A",
+                    "place_id": "abc123",
+                    "website": "https://example.com",
+                    "phone": "03-0000-0000",
+                    "email": "info@example.com",
+                    "address": "千葉県市川市1-2-3",
+                    "category": "法律事務所",
+                    "industry": "専門サービス",
+                    "rating": 4.8,
+                    "user_ratings_total": 12,
+                    "prefecture": "千葉県",
+                    "city": "市川市",
+                },
+                user_id=1,
+            )
+            upsert_lead(
+                {
+                    "name": "Office A",
+                    "place_id": "abc123",
+                    "website": "",
+                    "phone": "",
+                    "email": "",
+                    "address": "",
+                    "category": "",
+                    "industry": "",
+                    "rating": None,
+                    "user_ratings_total": None,
+                    "prefecture": "",
+                    "city": "",
+                },
+                user_id=None,
+            )
+
+            conn = sqlite3.connect(Path(tmpdir) / "test.db")
+            conn.row_factory = sqlite3.Row
+            row = conn.execute("select website, rating, user_ratings_total, user_id from leads where place_id='abc123'").fetchone()
+            conn.close()
+
+            self.assertEqual(row["website"], "https://example.com")
+            self.assertEqual(row["rating"], 4.8)
+            self.assertEqual(row["user_ratings_total"], 12)
+            self.assertEqual(row["user_id"], 1)
 
 
 if __name__ == "__main__":

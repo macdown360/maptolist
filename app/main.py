@@ -887,6 +887,16 @@ def log_audit(action: str, target_type: str, target_id: str, details: dict[str, 
         )
 
 
+def adopt_orphan_leads(user_id: int) -> None:
+    """Backfill legacy rows that were created before user_id existed."""
+    if not user_id:
+        return
+    with sqlite3.connect(DB_PATH) as conn:
+        user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        if is_auth_disabled() or user_count <= 1:
+            conn.execute("UPDATE leads SET user_id = ? WHERE user_id IS NULL", (user_id,))
+
+
 def is_google_oauth_configured() -> bool:
     return bool(GOOGLE_CLIENT_ID.strip() and GOOGLE_CLIENT_SECRET.strip())
 
@@ -1000,6 +1010,7 @@ def get_leads(
     sort_dir: str = Query("desc", description="並び順 asc/desc"),
 ) -> dict[str, Any]:
     init_db()
+    adopt_orphan_leads(int(user["id"]))
 
     sql = """
         SELECT
@@ -1122,6 +1133,7 @@ def get_leads(
 @app.get("/api/leads/names")
 def get_lead_names(user: CurrentUser, limit: int = Query(300, ge=1, le=2000)) -> dict[str, Any]:
     init_db()
+    adopt_orphan_leads(int(user["id"]))
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute(
             """
@@ -1139,6 +1151,7 @@ def get_lead_names(user: CurrentUser, limit: int = Query(300, ge=1, le=2000)) ->
 @app.post("/api/import/google-places")
 async def import_google_places(payload: ImportRequest, user: CurrentUser) -> dict[str, Any]:
     init_db()
+    adopt_orphan_leads(int(user["id"]))
     api_key = payload.api_key.strip() or get_google_api_key(user)
     if not api_key:
         raise HTTPException(status_code=400, detail="Google Maps APIキーが未設定です。APIキー設定でこのブラウザに保存してください。")
@@ -1748,22 +1761,22 @@ def upsert_lead(item: dict[str, Any], user_id: int | None = None) -> None:
             INSERT INTO leads (name, place_id, website, phone, email, address, category, industry, rating, user_ratings_total, raw_types, postal_code, prefecture, city, address_detail, address_components_json, user_id, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(place_id) DO UPDATE SET
-                name=excluded.name,
-                website=excluded.website,
-                phone=excluded.phone,
-                email=excluded.email,
-                address=excluded.address,
-                category=excluded.category,
-                industry=excluded.industry,
-                rating=excluded.rating,
-                user_ratings_total=excluded.user_ratings_total,
-                raw_types=excluded.raw_types,
-                postal_code=excluded.postal_code,
-                prefecture=excluded.prefecture,
-                city=excluded.city,
-                address_detail=excluded.address_detail,
-                address_components_json=excluded.address_components_json,
-                user_id=excluded.user_id,
+                name=CASE WHEN TRIM(COALESCE(excluded.name, '')) <> '' THEN excluded.name ELSE leads.name END,
+                website=CASE WHEN TRIM(COALESCE(excluded.website, '')) <> '' THEN excluded.website ELSE leads.website END,
+                phone=CASE WHEN TRIM(COALESCE(excluded.phone, '')) <> '' THEN excluded.phone ELSE leads.phone END,
+                email=CASE WHEN TRIM(COALESCE(excluded.email, '')) <> '' THEN excluded.email ELSE leads.email END,
+                address=CASE WHEN TRIM(COALESCE(excluded.address, '')) <> '' THEN excluded.address ELSE leads.address END,
+                category=CASE WHEN TRIM(COALESCE(excluded.category, '')) <> '' THEN excluded.category ELSE leads.category END,
+                industry=CASE WHEN TRIM(COALESCE(excluded.industry, '')) <> '' THEN excluded.industry ELSE leads.industry END,
+                rating=COALESCE(excluded.rating, leads.rating),
+                user_ratings_total=COALESCE(excluded.user_ratings_total, leads.user_ratings_total),
+                raw_types=CASE WHEN TRIM(COALESCE(excluded.raw_types, '')) <> '' THEN excluded.raw_types ELSE leads.raw_types END,
+                postal_code=CASE WHEN TRIM(COALESCE(excluded.postal_code, '')) <> '' THEN excluded.postal_code ELSE leads.postal_code END,
+                prefecture=CASE WHEN TRIM(COALESCE(excluded.prefecture, '')) <> '' THEN excluded.prefecture ELSE leads.prefecture END,
+                city=CASE WHEN TRIM(COALESCE(excluded.city, '')) <> '' THEN excluded.city ELSE leads.city END,
+                address_detail=CASE WHEN TRIM(COALESCE(excluded.address_detail, '')) <> '' THEN excluded.address_detail ELSE leads.address_detail END,
+                address_components_json=CASE WHEN TRIM(COALESCE(excluded.address_components_json, '')) <> '' THEN excluded.address_components_json ELSE leads.address_components_json END,
+                user_id=COALESCE(excluded.user_id, leads.user_id),
                 updated_at=excluded.updated_at
             """,
             (
