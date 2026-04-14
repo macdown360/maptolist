@@ -372,23 +372,25 @@ function compareNullable(a, b, direction) {
 
 function sortLeadItemsClientSide(items, sortBy, sortDir) {
   const keyMap = {
-    updated_at: 'updated_at',
-    address: 'address',
-    prefecture: 'prefecture',
-    city: 'city',
-    name: 'name',
-    category: 'effective_category',
-    industry: 'effective_industry',
-    rating: 'rating',
-    user_ratings_total: 'user_ratings_total',
+    updated_at: ['updated_at'],
+    address: ['address', 'prefecture', 'city', 'address_detail', 'name'],
+    prefecture: ['prefecture', 'city', 'address_detail', 'name'],
+    city: ['city', 'prefecture', 'address_detail', 'name'],
+    name: ['name'],
+    category: ['effective_category', 'name'],
+    industry: ['effective_industry', 'name'],
+    rating: ['rating', 'user_ratings_total', 'name'],
+    user_ratings_total: ['user_ratings_total', 'rating', 'name'],
   };
 
-  const key = keyMap[sortBy];
-  if (!key) return items;
+  const keys = keyMap[sortBy];
+  if (!keys) return items;
 
   return [...items].sort((a, b) => {
-    const primary = compareNullable(a[key], b[key], sortDir);
-    if (primary !== 0) return primary;
+    for (const key of keys) {
+      const primary = compareNullable(a[key], b[key], sortDir);
+      if (primary !== 0) return primary;
+    }
     return compareNullable(a.updated_at, b.updated_at, 'desc');
   });
 }

@@ -1027,15 +1027,15 @@ def get_leads(
         params.append(industry)
 
     allowed_sort_columns = {
-        "updated_at": "l.updated_at",
-        "address": "l.address",
-        "prefecture": "TRIM(COALESCE(l.prefecture, ''))",
-        "city": "TRIM(COALESCE(l.city, ''))",
-        "name": "l.name",
-        "category": "COALESCE(mt.category, l.category)",
-        "industry": "COALESCE(mt.industry, l.industry)",
-        "rating": "l.rating",
-        "user_ratings_total": "l.user_ratings_total",
+        "updated_at": "l.updated_at {dir}, l.id DESC",
+        "address": "l.address {dir}, TRIM(COALESCE(l.prefecture, '')) {dir}, TRIM(COALESCE(l.city, '')) {dir}, l.updated_at DESC",
+        "prefecture": "TRIM(COALESCE(l.prefecture, '')) {dir}, TRIM(COALESCE(l.city, '')) {dir}, TRIM(COALESCE(l.address_detail, '')) {dir}, l.name {dir}, l.updated_at DESC",
+        "city": "TRIM(COALESCE(l.city, '')) {dir}, TRIM(COALESCE(l.prefecture, '')) {dir}, TRIM(COALESCE(l.address_detail, '')) {dir}, l.name {dir}, l.updated_at DESC",
+        "name": "l.name {dir}, l.updated_at DESC",
+        "category": "COALESCE(mt.category, l.category) {dir}, l.name {dir}, l.updated_at DESC",
+        "industry": "COALESCE(mt.industry, l.industry) {dir}, l.name {dir}, l.updated_at DESC",
+        "rating": "l.rating {dir}, l.user_ratings_total {dir}, l.name {dir}, l.updated_at DESC",
+        "user_ratings_total": "l.user_ratings_total {dir}, l.rating {dir}, l.name {dir}, l.updated_at DESC",
     }
 
     normalized_dir = sort_dir.strip().lower()
@@ -1047,7 +1047,7 @@ def get_leads(
     if not sort_column:
         raise HTTPException(status_code=400, detail="未対応の sort_by です")
 
-    sql += f" ORDER BY {sort_column} {normalized_dir}, l.updated_at DESC"
+    sql += " ORDER BY " + sort_column.format(dir=normalized_dir.upper())
 
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
