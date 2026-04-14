@@ -296,13 +296,22 @@ function hydrateLeadListState() {
   updateLeadSortIndicators();
 }
 
+function formatLeadAddress(value) {
+  return String(value || '')
+    .replace(/^日本[、\s]*/u, '')
+    .replace(/^Japan[،,\s]*/iu, '')
+    .trim();
+}
+
 function renderLeadsTable(items) {
   leadsTbody.innerHTML = items
     .map(
       (item) => `
       <tr>
         <td><input type="checkbox" class="lead-check" value="${item.id}" /></td>
-        <td>${escapeHtml(item.address)}</td>
+        <td>${escapeHtml(formatLeadAddress(item.address))}</td>
+        <td>${escapeHtml(item.prefecture || '')}</td>
+        <td>${escapeHtml(item.city || '')}</td>
         <td>${escapeHtml(item.name)}</td>
         <td>${escapeHtml(item.effective_category || item.category)}</td>
         <td>${escapeHtml(item.effective_industry || item.industry)}</td>
@@ -583,7 +592,9 @@ function exportRowsFromLeadItems(items) {
   return items.map((item) => ({
     id: item.id,
     name: item.name || '',
-    address: item.address || '',
+    address: formatLeadAddress(item.address || ''),
+    prefecture: item.prefecture || '',
+    city: item.city || '',
     category: item.effective_category || item.category || '',
     industry: item.effective_industry || item.industry || '',
     rating: item.rating ?? '',
@@ -625,13 +636,15 @@ function exportSelectedLeadsAsCsv() {
   }
 
   const rows = exportRowsFromLeadItems(selectedItems);
-  const headers = ['ID', '企業・団体名', '住所', '業種', '業界', '評価', '評価件数', 'Web', '電話', 'メール', '更新日時'];
+  const headers = ['ID', '企業・団体名', '住所', '都道府県', '市区町村', '業種', '業界', '評価', '評価件数', 'Web', '電話', 'メール', '更新日時'];
   const lines = [headers.join(',')];
   for (const row of rows) {
     lines.push([
       row.id,
       row.name,
       row.address,
+      row.prefecture,
+      row.city,
       row.category,
       row.industry,
       row.rating,
@@ -668,6 +681,8 @@ function exportSelectedLeadsAsExcel() {
         <td>${escapeHtml(row.id)}</td>
         <td>${escapeHtml(row.name)}</td>
         <td>${escapeHtml(row.address)}</td>
+        <td>${escapeHtml(row.prefecture)}</td>
+        <td>${escapeHtml(row.city)}</td>
         <td>${escapeHtml(row.category)}</td>
         <td>${escapeHtml(row.industry)}</td>
         <td>${escapeHtml(row.rating)}</td>
@@ -685,6 +700,8 @@ function exportSelectedLeadsAsExcel() {
       <th>ID</th>
       <th>企業・団体名</th>
       <th>住所</th>
+      <th>都道府県</th>
+      <th>市区町村</th>
       <th>業種</th>
       <th>業界</th>
       <th>評価</th>
