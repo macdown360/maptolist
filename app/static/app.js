@@ -1541,7 +1541,7 @@ googleKeyForm?.addEventListener('submit', async (e) => {
 
   setStoredMapsApiKey(key);
   googleKeyStatus.textContent = `APIキーをブラウザに保存しました: ${maskApiKey(key)}`;
-  addActivity('Google Maps APIキーをブラウザに保存しました。', 'user');
+  addActivity('Google Places APIキーをブラウザに保存しました。', 'user');
   googleKeyForm.reset();
   await fetchGoogleKeyStatus();
 });

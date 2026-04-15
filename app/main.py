@@ -1441,7 +1441,7 @@ async def import_google_places(payload: ImportRequest, user: CurrentUser) -> dic
     adopt_orphan_leads(int(user["id"]))
     api_key = payload.api_key.strip() or get_google_api_key(user)
     if not api_key:
-        raise HTTPException(status_code=400, detail="Google Maps APIキーが未設定です。APIキー設定でこのブラウザに保存してください。")
+        raise HTTPException(status_code=400, detail="Google Places APIキーが未設定です。APIキー設定でこのブラウザに保存してください。")
 
     query = payload.query.strip()
     if payload.region.strip():
