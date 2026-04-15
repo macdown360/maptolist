@@ -8,7 +8,6 @@ const tagForm = document.querySelector('#tag-form');
 const suppressionForm = document.querySelector('#suppression-form');
 const adapterForm = document.querySelector('#adapter-form');
 const googleKeyForm = document.querySelector('#google-key-form');
-const inquirySettingsForm = document.querySelector('#inquiry-settings-form');
 
 const importResult = document.querySelector('#import-result');
 const contactResult = document.querySelector('#contact-result');
@@ -17,7 +16,6 @@ const suppressionResult = document.querySelector('#suppression-result');
 const adapterResult = document.querySelector('#adapter-result');
 const limitResult = document.querySelector('#limit-result');
 const googleKeyStatus = document.querySelector('#google-key-status');
-const inquirySettingsResult = document.querySelector('#inquiry-settings-result');
 const myListAddResult = document.querySelector('#my-list-add-result');
 const myListResult = document.querySelector('#my-list-result');
 const historyResult = document.querySelector('#history-result');
@@ -35,8 +33,6 @@ const leadsThead = document.querySelector('#lead-table thead');
 const myListTbody = document.querySelector('#my-list-table tbody');
 const historyTbody = document.querySelector('#history-table tbody');
 const contactFormsTbody = document.querySelector('#contact-forms-table tbody');
-const contactFormAssist = document.querySelector('#contact-form-assist');
-const contactFormAssistNote = document.querySelector('#contact-form-assist-note');
 
 const categorySelect = document.querySelector('select[name="category"]');
 const industrySelect = document.querySelector('select[name="industry"]');
@@ -53,13 +49,11 @@ const historySummary = document.querySelector('#history-summary');
 const toast = document.querySelector('#toast');
 
 const timelineMessageMap = new Map();
-let currentInquiryAssistValues = {};
 
 const leadSelectAll = document.querySelector('#select-all');
 const exportCsvBtn = document.querySelector('#export-csv-btn');
 const exportExcelBtn = document.querySelector('#export-excel-btn');
 const discoverContactFormsBtn = document.querySelector('#discover-contact-forms-btn');
-const downloadAutofillJsonBtn = document.querySelector('#download-autofill-json-btn');
 const myListSelectAll = document.querySelector('#my-list-select-all');
 const addToMyListBtn = document.querySelector('#add-to-my-list');
 const myListSendBtn = document.querySelector('#my-list-send-btn');
@@ -77,7 +71,6 @@ const MAPS_KEY_STORAGE_KEY = 'maptolist.google_maps_api_key.v2';
 const LEADS_CACHE_STORAGE_KEY = 'maptolist.leads_cache.v2';
 const LEADS_FILTER_STORAGE_KEY = 'maptolist.leads_filter.v2';
 const CONTACT_FORMS_CACHE_STORAGE_KEY = 'maptolist.contact_forms_cache.v2';
-const INQUIRY_SETTINGS_STORAGE_KEY = 'maptolist.inquiry_settings.v2';
 const BROWSER_CLIENT_ID_STORAGE_KEY = 'maptolist.browser_client_id.v1';
 const API_BASE_URL = String(window.__API_BASE_URL || '').trim().replace(/\/$/, '');
 const IS_GITHUB_PAGES = window.location.hostname.endsWith('github.io');
@@ -192,106 +185,6 @@ function getBrowserClientId() {
   } catch {
     return `browser-${Date.now()}`;
   }
-}
-
-function getStoredInquirySettings() {
-  return getStoredJson(INQUIRY_SETTINGS_STORAGE_KEY, {
-    sender_company: '',
-    sender_name: '',
-    sender_email: '',
-    sender_phone: '',
-    subject: '',
-    body: '',
-  });
-}
-
-function renderInquiryTemplate(template, varsMap = {}) {
-  let out = String(template || '');
-  Object.entries(varsMap).forEach(([key, value]) => {
-    out = out.replaceAll(`{{${key}}}`, String(value || ''));
-  });
-  return out;
-}
-
-function hydrateInquirySettingsForm(settings = getStoredInquirySettings()) {
-  if (!inquirySettingsForm) return;
-  Object.entries(settings || {}).forEach(([key, value]) => {
-    const field = inquirySettingsForm.querySelector(`[name="${key}"]`);
-    if (field) field.value = value || '';
-  });
-}
-
-async function fetchInquirySettings() {
-  if (!inquirySettingsForm) return;
-  hydrateInquirySettingsForm();
-  renderContactFormAssist();
-  applyInquirySettingsToContactForm();
-}
-
-function applyInquirySettingsToContactForm() {
-  if (!contactForm) return;
-  const settings = getStoredInquirySettings();
-  const subjectInput = contactForm.querySelector('input[name="subject"]');
-  const bodyInput = contactForm.querySelector('textarea[name="body"]');
-  if (subjectInput && !String(subjectInput.value || '').trim() && settings.subject) {
-    subjectInput.value = settings.subject;
-  }
-  if (bodyInput && !String(bodyInput.value || '').trim() && settings.body) {
-    bodyInput.value = settings.body;
-  }
-}
-
-function buildInquiryAssistPayload(leadName, formUrl, website) {
-  const settings = getStoredInquirySettings();
-  const varsMap = {
-    sender_company: settings.sender_company || '',
-    sender_name: settings.sender_name || '',
-    sender_email: settings.sender_email || '',
-    sender_phone: settings.sender_phone || '',
-    target_company_name: leadName || '',
-    target_website: website || '',
-    form_url: formUrl || '',
-  };
-
-  const payload = {
-    sender_company: renderInquiryTemplate(settings.sender_company || '', varsMap).trim(),
-    sender_name: renderInquiryTemplate(settings.sender_name || '', varsMap).trim(),
-    sender_email: renderInquiryTemplate(settings.sender_email || '', varsMap).trim(),
-    sender_phone: renderInquiryTemplate(settings.sender_phone || '', varsMap).trim(),
-    subject: renderInquiryTemplate(settings.subject || '', varsMap).trim(),
-    body: renderInquiryTemplate(settings.body || '', varsMap).trim(),
-  };
-
-  payload.fullText = [
-    payload.sender_company ? `自社名: ${payload.sender_company}` : '',
-    payload.sender_name ? `担当者名: ${payload.sender_name}` : '',
-    payload.sender_email ? `メールアドレス: ${payload.sender_email}` : '',
-    payload.sender_phone ? `電話番号: ${payload.sender_phone}` : '',
-    leadName ? `送信先企業: ${leadName}` : '',
-    payload.subject ? `件名: ${payload.subject}` : '',
-    payload.body ? `本文:\n${payload.body}` : '',
-  ].filter(Boolean).join('\n\n');
-
-  return payload;
-}
-
-function renderContactFormAssist(leadName = '', formUrl = '', website = '') {
-  const payload = buildInquiryAssistPayload(leadName, formUrl, website);
-  currentInquiryAssistValues = payload;
-
-  if (contactFormAssistNote) {
-    contactFormAssistNote.textContent = leadName
-      ? `${leadName} 向けの入力内容を表示中です。必要な項目だけコピーして貼り付けてください。`
-      : 'フォームを開くと、ここに貼り付け用の内容を表示します。';
-  }
-
-  document.querySelectorAll('[data-assist-field]').forEach((el) => {
-    const key = String(el.dataset.assistField || '');
-    const value = payload[key] || '';
-    if ('value' in el) {
-      el.value = value;
-    }
-  });
 }
 
 async function apiFetch(url, options = {}) {
@@ -1287,32 +1180,6 @@ async function fetchContactForms() {
   if (contactFormsResult) contactFormsResult.textContent = `${items.length}件の問い合わせフォームURLを表示中`;
 }
 
-async function downloadAutofillDataJson() {
-  const basePayload = {
-    settings: getStoredInquirySettings(),
-    items: getStoredContactFormItems(),
-    exported_at: new Date().toISOString(),
-    browser_client_id: getBrowserClientId(),
-  };
-
-  try {
-    const res = await apiFetch('/api/contact-forms/autofill-data?limit=200');
-    if (!res) return;
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || '取得失敗');
-    const payload = {
-      ...basePayload,
-      items: Array.isArray(data.items) ? data.items : basePayload.items,
-    };
-    downloadTextAsFile(JSON.stringify(payload, null, 2), `contact-form-autofill-${new Date().toISOString().slice(0, 10)}.json`, 'application/json;charset=utf-8;');
-    showToast('Puppeteer用データを保存しました', 'success');
-    return;
-  } catch {
-    downloadTextAsFile(JSON.stringify(basePayload, null, 2), `contact-form-autofill-${new Date().toISOString().slice(0, 10)}.json`, 'application/json;charset=utf-8;');
-    showToast('このブラウザに保存されたデータからJSONを出力しました', 'info');
-  }
-}
-
 async function discoverSelectedContactForms() {
   const lead_ids = getSelectedLeadIds();
   if (!lead_ids.length) {
@@ -1601,7 +1468,7 @@ historyTimeline?.addEventListener('click', async (e) => {
   }
 });
 
-contactFormsTbody?.addEventListener('click', async (e) => {
+contactFormsTbody?.addEventListener('click', (e) => {
   const target = e.target;
   if (!(target instanceof Element)) return;
 
@@ -1617,55 +1484,15 @@ contactFormsTbody?.addEventListener('click', async (e) => {
   const formUrl = String(link.dataset.formUrl || '').trim();
   if (!formUrl) return;
 
-  const leadName = String(link.dataset.leadName || '').trim();
-  const website = String(link.dataset.website || '').trim();
-
-  renderContactFormAssist(leadName, formUrl, website);
-  const payload = buildInquiryAssistPayload(leadName, formUrl, website);
-
   const popup = window.open('', '_blank', 'noopener,noreferrer');
   if (popup) {
     popup.opener = null;
     popup.location.href = formUrl;
   }
 
-  try {
-    if (payload.body) {
-      await copyTextToClipboard(payload.body);
-      showToast('本文をコピーしました。下の入力補助から他の項目もコピーできます', 'success');
-    } else if (payload.fullText) {
-      await copyTextToClipboard(payload.fullText);
-      showToast('入力内容をコピーしました', 'success');
-    } else {
-      showToast('フォームを新しいタブで開きました', 'info');
-    }
-  } catch (_err) {
-    showToast('フォームを新しいタブで開きました', 'info');
-  }
-
+  const leadName = String(link.dataset.leadName || '').trim();
+  showToast('フォームを新しいタブで開きました', 'info');
   addActivity(`問い合わせフォームを開きました: ${leadName || formUrl}`, 'user');
-});
-
-contactFormAssist?.addEventListener('click', async (e) => {
-  const target = e.target;
-  if (!(target instanceof Element)) return;
-
-  const btn = target.closest('.copy-assist-btn');
-  if (!btn) return;
-
-  const field = String(btn.dataset.copyField || '').trim();
-  const value = String(currentInquiryAssistValues[field] || '').trim();
-  if (!value) {
-    showToast('コピーする内容がありません', 'info');
-    return;
-  }
-
-  try {
-    await copyTextToClipboard(value);
-    showToast('コピーしました', 'success');
-  } catch (_err) {
-    showToast('コピーに失敗しました', 'error');
-  }
 });
 
 addToMyListBtn?.addEventListener('click', addSelectedToMyList);
@@ -1832,27 +1659,6 @@ googleKeyForm?.addEventListener('submit', async (e) => {
   await fetchGoogleKeyStatus();
 });
 
-inquirySettingsForm?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const formData = new FormData(inquirySettingsForm);
-  const payload = {
-    sender_company: String(formData.get('sender_company') || '').trim(),
-    sender_name: String(formData.get('sender_name') || '').trim(),
-    sender_email: String(formData.get('sender_email') || '').trim(),
-    sender_phone: String(formData.get('sender_phone') || '').trim(),
-    subject: String(formData.get('subject') || '').trim(),
-    body: String(formData.get('body') || '').trim(),
-  };
-
-  setStoredJson(INQUIRY_SETTINGS_STORAGE_KEY, payload);
-  if (inquirySettingsResult) inquirySettingsResult.textContent = 'このブラウザに問い合わせフォーム入力内容を保存しました';
-
-  renderContactFormAssist();
-  applyInquirySettingsToContactForm();
-  showToast('問い合わせ内容を保存しました', 'success');
-  addActivity('問い合わせフォーム入力設定をこのブラウザに保存しました。', 'user');
-});
-
 auditRefresh?.addEventListener('click', fetchAuditLogs);
 
 leadSelectAll?.addEventListener('change', (e) => {
@@ -1865,7 +1671,6 @@ leadSelectAll?.addEventListener('change', (e) => {
 exportCsvBtn?.addEventListener('click', exportSelectedLeadsAsCsv);
 exportExcelBtn?.addEventListener('click', exportSelectedLeadsAsExcel);
 discoverContactFormsBtn?.addEventListener('click', discoverSelectedContactForms);
-downloadAutofillJsonBtn?.addEventListener('click', downloadAutofillDataJson);
 
 myListSelectAll?.addEventListener('change', (e) => {
   const checked = e.target.checked;
@@ -1877,11 +1682,13 @@ myListSelectAll?.addEventListener('change', (e) => {
 hydrateMyListFilterFromUrl();
 hydrateLeadListState();
 hydrateContactFormsState();
-hydrateInquirySettingsForm();
-renderContactFormAssist();
-applyInquirySettingsToContactForm();
 loadUserBadge();
 fetchLeads();
 fetchGoogleKeyStatus();
 fetchPlaceTypes();
-fetchInquirySettings();
+fetchMyList();
+fetchContactLogs();
+fetchLeadNameSuggestions();
+fetchAdapters();
+fetchSuppressions();
+fetchAuditLogs();

@@ -339,15 +339,6 @@ class BulkTagRequest(BaseModel):
     note: str = ""
 
 
-class InquirySettingsRequest(BaseModel):
-    sender_company: str = ""
-    sender_name: str = ""
-    sender_email: str = ""
-    sender_phone: str = ""
-    subject: str = ""
-    body: str = ""
-
-
 class LeadSelectionRequest(BaseModel):
     lead_ids: list[int] = Field(default_factory=list)
 
@@ -545,22 +536,6 @@ def init_db() -> None:
                 updated_at TEXT NOT NULL,
                 UNIQUE(user_id, lead_id),
                 FOREIGN KEY (lead_id) REFERENCES leads (id),
-                FOREIGN KEY (user_id) REFERENCES users (id)
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS inquiry_settings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL UNIQUE,
-                sender_company TEXT NOT NULL DEFAULT '',
-                sender_name TEXT NOT NULL DEFAULT '',
-                sender_email TEXT NOT NULL DEFAULT '',
-                sender_phone TEXT NOT NULL DEFAULT '',
-                subject TEXT NOT NULL DEFAULT '',
-                body TEXT NOT NULL DEFAULT '',
-                updated_at TEXT NOT NULL,
                 FOREIGN KEY (user_id) REFERENCES users (id)
             )
             """
@@ -774,29 +749,6 @@ def set_env_key(key: str, value: str) -> None:
 
     env_path.write_text("\n".join(out).strip() + "\n", encoding="utf-8")
     os.environ[key] = value
-
-
-def get_inquiry_settings_data(user_id: int) -> dict[str, Any]:
-    defaults = {
-        "sender_company": "",
-        "sender_name": "",
-        "sender_email": "",
-        "sender_phone": "",
-        "subject": "",
-        "body": "",
-        "updated_at": "",
-    }
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            """
-            SELECT sender_company, sender_name, sender_email, sender_phone, subject, body, updated_at
-            FROM inquiry_settings
-            WHERE user_id = ?
-            """,
-            (user_id,),
-        ).fetchone()
-    return {**defaults, **(dict(row) if row else {})}
 
 
 # ---------------------------------------------------------------------------
@@ -1358,45 +1310,6 @@ def set_google_maps_key(payload: GoogleMapsKeyRequest, user: CurrentUser) -> dic
     return {"ok": True}
 
 
-@app.get("/api/inquiry-settings")
-def get_inquiry_settings(user: CurrentUser) -> dict[str, Any]:
-    init_db()
-    return get_inquiry_settings_data(int(user["id"]))
-
-
-@app.post("/api/inquiry-settings")
-def save_inquiry_settings(payload: InquirySettingsRequest, user: CurrentUser) -> dict[str, Any]:
-    init_db()
-    now = now_iso()
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            """
-            INSERT INTO inquiry_settings (user_id, sender_company, sender_name, sender_email, sender_phone, subject, body, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(user_id) DO UPDATE SET
-                sender_company=excluded.sender_company,
-                sender_name=excluded.sender_name,
-                sender_email=excluded.sender_email,
-                sender_phone=excluded.sender_phone,
-                subject=excluded.subject,
-                body=excluded.body,
-                updated_at=excluded.updated_at
-            """,
-            (
-                user["id"],
-                payload.sender_company.strip(),
-                payload.sender_name.strip(),
-                payload.sender_email.strip(),
-                payload.sender_phone.strip(),
-                payload.subject.strip(),
-                payload.body.strip(),
-                now,
-            ),
-        )
-    log_audit("update_setting", "setting", "inquiry_settings", {"configured": True}, actor=user["email"])
-    return {"ok": True, **get_inquiry_settings_data(int(user["id"]))}
-
-
 @app.get("/api/leads")
 def get_leads(
     request: Request,
@@ -1852,32 +1765,6 @@ def list_contact_forms(request: Request, user: CurrentUser) -> dict[str, Any]:
             (user["id"], browser_client_id),
         ).fetchall()
     return {"items": [dict(r) for r in rows], "count": len(rows)}
-
-
-@app.get("/api/contact-forms/autofill-data")
-def get_contact_form_autofill_data(request: Request, user: CurrentUser, limit: int = Query(50, ge=1, le=500)) -> dict[str, Any]:
-    init_db()
-    browser_client_id = get_browser_client_id(request)
-    settings = get_inquiry_settings_data(int(user["id"]))
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            """
-            SELECT
-                d.lead_id,
-                l.name AS lead_name,
-                d.website,
-                d.form_url,
-                d.checked_at
-            FROM contact_form_discoveries d
-            JOIN leads l ON l.id = d.lead_id
-            WHERE d.user_id = ? AND COALESCE(d.browser_client_id, '') = ? AND d.form_url <> ''
-            ORDER BY d.checked_at DESC, l.name ASC
-            LIMIT ?
-            """,
-            (user["id"], browser_client_id, limit),
-        ).fetchall()
-    return {"settings": settings, "items": [dict(r) for r in rows], "count": len(rows)}
 
 
 @app.post("/api/contact-forms/discover")

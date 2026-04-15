@@ -270,32 +270,6 @@ class FetchPlacesPaginationTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(created2)
             self.assertEqual(count, 2)
 
-    def test_inquiry_settings_roundtrip_via_api(self):
-        with tempfile.TemporaryDirectory() as tmpdir, patch("app.main.DB_PATH", Path(tmpdir) / "test.db"), patch("app.main.DISABLE_GOOGLE_LOGIN", True):
-            init_db()
-            client = TestClient(app)
-
-            save_res = client.post(
-                "/api/inquiry-settings",
-                json={
-                    "sender_company": "株式会社サンプル",
-                    "sender_name": "山田 太郎",
-                    "sender_email": "sales@example.com",
-                    "sender_phone": "03-1234-5678",
-                    "subject": "ご相談",
-                    "body": "お問い合わせ本文",
-                },
-            )
-            self.assertEqual(save_res.status_code, 200)
-
-            get_res = client.get("/api/inquiry-settings")
-            self.assertEqual(get_res.status_code, 200)
-            payload = get_res.json()
-            self.assertEqual(payload["sender_company"], "株式会社サンプル")
-            self.assertEqual(payload["sender_name"], "山田 太郎")
-            self.assertEqual(payload["sender_email"], "sales@example.com")
-            self.assertEqual(payload["subject"], "ご相談")
-
     def test_browser_scoped_leads_are_isolated(self):
         with tempfile.TemporaryDirectory() as tmpdir, patch("app.main.DB_PATH", Path(tmpdir) / "test.db"), patch("app.main.DISABLE_GOOGLE_LOGIN", True):
             init_db()
