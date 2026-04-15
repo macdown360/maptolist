@@ -39,7 +39,7 @@ pip install -r requirements.txt
 2. 環境変数を設定
 
 ```bash
-export GOOGLE_MAPS_API_KEY="your_google_maps_api_key"
+export GOOGLE_PLACES_API_KEY="your_google_places_api_key"
 
 # メール送信を有効化する場合
 export EMAIL_DRY_RUN="false"
@@ -83,7 +83,7 @@ Codespaces / Dev Container では、`PORTS` タブで `8000` を `Open in Browse
 6. 必要に応じて「アプリケーションの制限」を設定
 	- 初回は制限を弱めて疎通確認し、動作確認後に厳しくするのが安全
 7. 本アプリの左メニュー `APIキー設定` を開く
-8. `GOOGLE_MAPS_API_KEY` 入力欄にキーを貼り付けて保存
+8. `GOOGLE_PLACES_API_KEY` 入力欄にキーを貼り付けて保存
 9. 画面に `設定済み: xxxxxx...xxxx` が表示されることを確認
 10. 左メニュー `データ取得` で次を入力してテスト取り込み
 	- キーワード例: `カフェ 東京` / `自動車整備 横浜` / `税理士 大阪`

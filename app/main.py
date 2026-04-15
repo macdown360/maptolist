@@ -700,7 +700,7 @@ def get_google_api_key(user: dict[str, Any] | None = None) -> str:
     # Authenticated users must use their own stored key.
     if user is not None:
         return str(user.get("maps_api_key", "")).strip()
-    return os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
+    return os.getenv("GOOGLE_PLACES_API_KEY", "").strip() or os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
 
 
 def set_env_key(key: str, value: str) -> None:
@@ -1280,7 +1280,7 @@ def set_google_maps_key(payload: GoogleMapsKeyRequest, user: CurrentUser) -> dic
             "UPDATE users SET maps_api_key=?, updated_at=? WHERE id=?",
             (key, now_iso(), user["id"]),
         )
-    log_audit("update_setting", "setting", "google_maps_api_key", {"configured": True}, actor=user["email"])
+    log_audit("update_setting", "setting", "google_places_api_key", {"configured": True}, actor=user["email"])
     return {"ok": True}
 
 
