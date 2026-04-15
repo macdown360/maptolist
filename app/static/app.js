@@ -1609,17 +1609,24 @@ contactFormsTbody?.addEventListener('click', async (e) => {
   if (!link) return;
 
   e.preventDefault();
+  e.stopPropagation();
+  if (typeof e.stopImmediatePropagation === 'function') {
+    e.stopImmediatePropagation();
+  }
+
   const formUrl = String(link.dataset.formUrl || '').trim();
+  if (!formUrl) return;
+
   const leadName = String(link.dataset.leadName || '').trim();
   const website = String(link.dataset.website || '').trim();
 
   renderContactFormAssist(leadName, formUrl, website);
   const payload = buildInquiryAssistPayload(leadName, formUrl, website);
 
-  const popup = window.open(formUrl, '_blank', 'noopener,noreferrer');
-  if (!popup) {
-    window.location.href = formUrl;
-    return;
+  const popup = window.open('', '_blank', 'noopener,noreferrer');
+  if (popup) {
+    popup.opener = null;
+    popup.location.href = formUrl;
   }
 
   try {
@@ -1630,10 +1637,10 @@ contactFormsTbody?.addEventListener('click', async (e) => {
       await copyTextToClipboard(payload.fullText);
       showToast('入力内容をコピーしました', 'success');
     } else {
-      showToast('フォームを開きました', 'info');
+      showToast('フォームを新しいタブで開きました', 'info');
     }
   } catch (_err) {
-    showToast('フォームを開きました。必要に応じて下の項目をコピーしてください', 'info');
+    showToast('フォームを新しいタブで開きました', 'info');
   }
 
   addActivity(`問い合わせフォームを開きました: ${leadName || formUrl}`, 'user');
