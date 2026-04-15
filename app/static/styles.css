@@ -514,6 +514,70 @@ td {
   width: 100px;
 }
 
+#contact-forms-table {
+  min-width: 760px;
+  table-layout: auto;
+}
+
+#contact-forms-table thead th {
+  background: linear-gradient(180deg, #f4f8ff, #edf4ff);
+  color: #334766;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+#contact-forms-table tbody tr:nth-child(even) {
+  background: #fbfdff;
+}
+
+#contact-forms-table tbody tr:hover {
+  background: #eef5ff;
+}
+
+#contact-forms-table th:nth-child(1),
+#contact-forms-table td:nth-child(1) {
+  width: 22%;
+}
+
+#contact-forms-table th:nth-child(2),
+#contact-forms-table td:nth-child(2) {
+  width: 24%;
+}
+
+#contact-forms-table th:nth-child(3),
+#contact-forms-table td:nth-child(3) {
+  width: 40%;
+}
+
+#contact-forms-table th:nth-child(4),
+#contact-forms-table td:nth-child(4) {
+  width: 14%;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.table-link {
+  display: inline-block;
+  color: #2e5fa8;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.table-link:hover {
+  text-decoration: underline;
+}
+
+.mini-url {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.date-cell {
+  white-space: nowrap;
+}
+
 #my-list-table th:nth-child(1),
 #my-list-table td:nth-child(1) {
   width: 36px;

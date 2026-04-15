@@ -646,6 +646,24 @@ function formatDateOnly(value) {
   return datePart.replaceAll('-', '/');
 }
 
+function shortenText(value, maxLength = 48) {
+  const text = String(value || '').trim();
+  if (!text || text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 1)}…`;
+}
+
+function formatUrlLabel(value) {
+  const url = String(value || '').trim();
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    const combined = `${parsed.hostname}${parsed.pathname === '/' ? '' : parsed.pathname}`;
+    return shortenText(combined, 52);
+  } catch {
+    return shortenText(url, 52);
+  }
+}
+
 function renderContactFormsTable(items) {
   if (!contactFormsTbody) return;
   if (!Array.isArray(items) || !items.length) {
@@ -661,10 +679,14 @@ function renderContactFormsTable(items) {
     .map(
       (item) => `
         <tr>
-          <td>${escapeHtml(item.lead_name || '')}</td>
-          <td>${item.website ? `<a href="${escapeHtml(item.website)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.website)}</a>` : ''}</td>
-          <td>${item.form_url ? `<a href="${escapeHtml(item.form_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.form_url)}</a>` : ''}</td>
-          <td>${escapeHtml(formatDateOnly(item.checked_at || ''))}</td>
+          <td>${escapeHtml(item.lead_name || '名称未設定')}</td>
+          <td>
+            ${item.website ? `<a class="table-link" href="${escapeHtml(item.website)}" target="_blank" rel="noopener noreferrer">公式サイトを開く</a><div class="mini-url">${escapeHtml(formatUrlLabel(item.website))}</div>` : '<span class="muted">-</span>'}
+          </td>
+          <td>
+            ${item.form_url ? `<a class="table-link form-link" href="${escapeHtml(item.form_url)}" target="_blank" rel="noopener noreferrer">フォームを開く</a><div class="mini-url">${escapeHtml(formatUrlLabel(item.form_url))}</div>` : '<span class="muted">-</span>'}
+          </td>
+          <td class="date-cell">${escapeHtml(formatDateOnly(item.checked_at || ''))}</td>
         </tr>
       `,
     )
