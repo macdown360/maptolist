@@ -70,6 +70,7 @@ let leadSortDir = 'desc';
 const MAPS_KEY_STORAGE_KEY = 'maptolist.google_maps_api_key';
 const LEADS_CACHE_STORAGE_KEY = 'maptolist.leads_cache.v1';
 const LEADS_FILTER_STORAGE_KEY = 'maptolist.leads_filter.v1';
+const CONTACT_FORMS_CACHE_STORAGE_KEY = 'maptolist.contact_forms_cache.v1';
 const API_BASE_URL = String(window.__API_BASE_URL || '').trim().replace(/\/$/, '');
 const IS_GITHUB_PAGES = window.location.hostname.endsWith('github.io');
 const IS_PLACEHOLDER_API_BASE_URL = API_BASE_URL === 'https://YOUR-BACKEND-URL';
@@ -287,6 +288,20 @@ function mergeLeadItems(existingItems = [], incomingItems = []) {
   return Array.from(merged.values());
 }
 
+function mergeContactFormItems(existingItems = [], incomingItems = []) {
+  const merged = new Map();
+  for (const item of existingItems || []) {
+    const key = String(item.lead_id || item.form_url || item.website || '');
+    if (key) merged.set(key, item);
+  }
+  for (const item of incomingItems || []) {
+    const key = String(item.lead_id || item.form_url || item.website || '');
+    if (!key) continue;
+    merged.set(key, { ...(merged.get(key) || {}), ...item });
+  }
+  return Array.from(merged.values()).sort((a, b) => String(b.checked_at || '').localeCompare(String(a.checked_at || '')));
+}
+
 function persistLeadListState(items = currentItems) {
   const safeItems = Array.isArray(items) ? items : [];
   setStoredJson(LEADS_CACHE_STORAGE_KEY, {
@@ -304,6 +319,19 @@ function persistLeadListState(items = currentItems) {
     industry: String(formData.get('industry') || ''),
     sortBy: leadSortBy,
     sortDir: leadSortDir,
+  });
+}
+
+function getStoredContactFormItems() {
+  const cached = getStoredJson(CONTACT_FORMS_CACHE_STORAGE_KEY, {});
+  return Array.isArray(cached.items) ? cached.items : [];
+}
+
+function persistContactFormsState(items = []) {
+  const safeItems = Array.isArray(items) ? items : [];
+  setStoredJson(CONTACT_FORMS_CACHE_STORAGE_KEY, {
+    items: safeItems,
+    savedAt: new Date().toISOString(),
   });
 }
 
@@ -661,6 +689,15 @@ function formatUrlLabel(value) {
     return shortenText(combined, 52);
   } catch {
     return shortenText(url, 52);
+  }
+}
+
+function hydrateContactFormsState() {
+  const items = getStoredContactFormItems();
+  if (!items.length) return;
+  renderContactFormsTable(items);
+  if (contactFormsResult) {
+    contactFormsResult.textContent = `${items.length}件の問い合わせフォームURLを保持中`;
   }
 }
 
@@ -1085,16 +1122,39 @@ async function sendMailToSelectedMyListItems() {
 
 async function fetchContactForms() {
   if (!contactFormsTbody) return;
-  const res = await apiFetch('/api/contact-forms');
-  if (!res) return;
-  const data = await res.json();
+
+  let res;
+  let data;
+  try {
+    res = await apiFetch('/api/contact-forms');
+    if (!res) return;
+    data = await res.json();
+  } catch (_err) {
+    const cachedItems = getStoredContactFormItems();
+    if (cachedItems.length) {
+      renderContactFormsTable(cachedItems);
+      if (contactFormsResult) contactFormsResult.textContent = `${cachedItems.length}件の問い合わせフォームURLを保持中`;
+      return;
+    }
+    if (contactFormsResult) contactFormsResult.textContent = '問い合わせフォームURLを取得できませんでした';
+    return;
+  }
+
   if (!res.ok) {
+    const cachedItems = getStoredContactFormItems();
+    if (cachedItems.length) {
+      renderContactFormsTable(cachedItems);
+      if (contactFormsResult) contactFormsResult.textContent = `${cachedItems.length}件の問い合わせフォームURLを保持中`;
+      return;
+    }
     if (contactFormsResult) contactFormsResult.textContent = `エラー: ${data.detail || '取得失敗'}`;
     return;
   }
 
-  const items = data.items || [];
+  const serverItems = Array.isArray(data.items) ? data.items : [];
+  const items = serverItems.length ? mergeContactFormItems(getStoredContactFormItems(), serverItems) : getStoredContactFormItems();
   renderContactFormsTable(items);
+  persistContactFormsState(items);
   if (contactFormsResult) contactFormsResult.textContent = `${items.length}件の問い合わせフォームURLを表示中`;
 }
 
@@ -1122,6 +1182,10 @@ async function discoverSelectedContactForms() {
     showToast('問い合わせフォーム探索に失敗しました', 'error');
     return;
   }
+
+  const foundItems = Array.isArray(data.items) ? data.items : [];
+  const mergedItems = mergeContactFormItems(getStoredContactFormItems(), foundItems);
+  persistContactFormsState(mergedItems);
 
   const msg = `探索完了: ${data.found}件 / 対象${data.checked}件`;
   if (exportResult) exportResult.textContent = msg;
@@ -1568,6 +1632,7 @@ myListSelectAll?.addEventListener('change', (e) => {
 
 hydrateMyListFilterFromUrl();
 hydrateLeadListState();
+hydrateContactFormsState();
 loadUserBadge();
 fetchLeads();
 fetchGoogleKeyStatus();
