@@ -400,6 +400,7 @@ def init_db() -> None:
                 user_ratings_total INTEGER,
                 editorial_summary TEXT,
                 raw_types TEXT,
+                browser_client_id TEXT DEFAULT '',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )
@@ -536,6 +537,7 @@ def init_db() -> None:
                 lead_id INTEGER NOT NULL,
                 website TEXT NOT NULL,
                 form_url TEXT NOT NULL,
+                browser_client_id TEXT DEFAULT '',
                 source TEXT NOT NULL DEFAULT 'heuristic_crawl',
                 confidence REAL NOT NULL DEFAULT 0,
                 checked_at TEXT NOT NULL,
@@ -564,6 +566,8 @@ def init_db() -> None:
             """
         )
         safe_add_column(conn, "leads", "user_id INTEGER")
+        safe_add_column(conn, "leads", "browser_client_id TEXT DEFAULT ''")
+        safe_add_column(conn, "contact_form_discoveries", "browser_client_id TEXT DEFAULT ''")
 
 
 def now_iso() -> str:
@@ -719,6 +723,28 @@ def safe_add_column(conn: sqlite3.Connection, table: str, column_def: str) -> No
     except sqlite3.OperationalError as exc:
         if "duplicate column name" not in str(exc).lower():
             raise
+
+
+def normalize_browser_client_id(value: str) -> str:
+    normalized = re.sub(r"[^a-zA-Z0-9_-]", "", str(value or "").strip())
+    return normalized[:120]
+
+
+def get_browser_client_id(request: Request) -> str:
+    return normalize_browser_client_id(
+        request.headers.get("X-Browser-Client-Id", "") or request.query_params.get("client_id", "")
+    )
+
+
+def scope_place_id(place_id: str, browser_client_id: str = "") -> str:
+    raw = str(place_id or "").strip()
+    if not raw:
+        return ""
+    client_id = normalize_browser_client_id(browser_client_id)
+    prefix = f"{client_id}::"
+    if client_id and raw.startswith(prefix):
+        return raw
+    return f"{prefix}{raw}" if client_id else raw
 
 
 def get_google_api_key(user: dict[str, Any] | None = None) -> str:
@@ -1373,6 +1399,7 @@ def save_inquiry_settings(payload: InquirySettingsRequest, user: CurrentUser) ->
 
 @app.get("/api/leads")
 def get_leads(
+    request: Request,
     user: CurrentUser,
     q: str = Query("", description="会社名や住所で検索"),
     category: str = Query("", description="業種フィルタ"),
@@ -1382,6 +1409,7 @@ def get_leads(
 ) -> dict[str, Any]:
     init_db()
     adopt_orphan_leads(int(user["id"]))
+    browser_client_id = get_browser_client_id(request)
 
     sql = """
         SELECT
@@ -1393,9 +1421,9 @@ def get_leads(
             COALESCE(mt.industry, l.industry) AS effective_industry
         FROM leads l
         LEFT JOIN manual_tags mt ON mt.lead_id = l.id
-        WHERE l.user_id = ?
+        WHERE l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
     """
-    params: list[Any] = [user["id"]]
+    params: list[Any] = [user["id"], browser_client_id]
 
     if q:
         sql += " AND (l.name LIKE ? OR l.address LIKE ? OR l.website LIKE ?)"
@@ -1442,19 +1470,19 @@ def get_leads(
             SELECT DISTINCT COALESCE(mt.category, l.category) AS c
             FROM leads l
             LEFT JOIN manual_tags mt ON mt.lead_id = l.id
-            WHERE COALESCE(mt.category, l.category) <> '' AND l.user_id = ?
+            WHERE COALESCE(mt.category, l.category) <> '' AND l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
             ORDER BY c
             """
-        , (user["id"],)).fetchall()
+        , (user["id"], browser_client_id)).fetchall()
         industries = conn.execute(
             """
             SELECT DISTINCT COALESCE(mt.industry, l.industry) AS i
             FROM leads l
             LEFT JOIN manual_tags mt ON mt.lead_id = l.id
-            WHERE COALESCE(mt.industry, l.industry) <> '' AND l.user_id = ?
+            WHERE COALESCE(mt.industry, l.industry) <> '' AND l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
             ORDER BY i
             """
-        , (user["id"],)).fetchall()
+        , (user["id"], browser_client_id)).fetchall()
 
     items: list[dict[str, Any]] = []
     for row in rows:
@@ -1505,27 +1533,29 @@ def get_leads(
 
 
 @app.get("/api/leads/names")
-def get_lead_names(user: CurrentUser, limit: int = Query(300, ge=1, le=2000)) -> dict[str, Any]:
+def get_lead_names(request: Request, user: CurrentUser, limit: int = Query(300, ge=1, le=2000)) -> dict[str, Any]:
     init_db()
     adopt_orphan_leads(int(user["id"]))
+    browser_client_id = get_browser_client_id(request)
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute(
             """
             SELECT DISTINCT name
             FROM leads
-            WHERE user_id = ? AND name <> ''
+            WHERE user_id = ? AND COALESCE(browser_client_id, '') = ? AND name <> ''
             ORDER BY updated_at DESC
             LIMIT ?
             """,
-            (user["id"], limit),
+            (user["id"], browser_client_id, limit),
         ).fetchall()
     return {"items": [r[0] for r in rows]}
 
 
 @app.post("/api/import/google-places")
-async def import_google_places(payload: ImportRequest, user: CurrentUser) -> dict[str, Any]:
+async def import_google_places(request: Request, payload: ImportRequest, user: CurrentUser) -> dict[str, Any]:
     init_db()
     adopt_orphan_leads(int(user["id"]))
+    browser_client_id = get_browser_client_id(request)
     api_key = payload.api_key.strip() or get_google_api_key(user)
     if not api_key:
         raise HTTPException(status_code=400, detail="Google Places APIキーが未設定です。APIキー設定でこのブラウザに保存してください。")
@@ -1549,7 +1579,9 @@ async def import_google_places(payload: ImportRequest, user: CurrentUser) -> dic
     added = 0
     updated = 0
     for item in items:
-        created = upsert_lead(item, user_id=user["id"])
+        item["place_id"] = scope_place_id(item.get("place_id", ""), browser_client_id)
+        item["browser_client_id"] = browser_client_id
+        created = upsert_lead(item, user_id=user["id"], browser_client_id=browser_client_id)
         if created:
             added += 1
         else:
@@ -1583,8 +1615,9 @@ def list_place_types(user: CurrentUser) -> dict[str, Any]:
 
 
 @app.post("/api/contact/email")
-async def send_email(payload: ContactRequest, user: CurrentUser) -> dict[str, Any]:
+async def send_email(request: Request, payload: ContactRequest, user: CurrentUser) -> dict[str, Any]:
     init_db()
+    browser_client_id = get_browser_client_id(request)
     if not payload.lead_ids:
         raise HTTPException(status_code=400, detail="対象企業を選択してください")
 
@@ -1595,8 +1628,8 @@ async def send_email(payload: ContactRequest, user: CurrentUser) -> dict[str, An
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            f"SELECT * FROM leads WHERE id IN ({','.join(['?'] * len(payload.lead_ids))}) AND user_id = ?",
-            [*payload.lead_ids, user["id"]],
+            f"SELECT * FROM leads WHERE id IN ({','.join(['?'] * len(payload.lead_ids))}) AND user_id = ? AND COALESCE(browser_client_id, '') = ?",
+            [*payload.lead_ids, user["id"], browser_client_id],
         ).fetchall()
 
     if not rows:
@@ -1686,8 +1719,9 @@ async def send_email(payload: ContactRequest, user: CurrentUser) -> dict[str, An
 
 
 @app.post("/api/contact/form")
-def send_form(payload: ContactRequest, user: CurrentUser) -> dict[str, Any]:
+def send_form(request: Request, payload: ContactRequest, user: CurrentUser) -> dict[str, Any]:
     init_db()
+    browser_client_id = get_browser_client_id(request)
     if not payload.lead_ids:
         raise HTTPException(status_code=400, detail="対象企業を選択してください")
 
@@ -1698,8 +1732,8 @@ def send_form(payload: ContactRequest, user: CurrentUser) -> dict[str, Any]:
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         leads = conn.execute(
-            f"SELECT * FROM leads WHERE id IN ({','.join(['?'] * len(payload.lead_ids))}) AND user_id = ?",
-            [*payload.lead_ids, user["id"]],
+            f"SELECT * FROM leads WHERE id IN ({','.join(['?'] * len(payload.lead_ids))}) AND user_id = ? AND COALESCE(browser_client_id, '') = ?",
+            [*payload.lead_ids, user["id"], browser_client_id],
         ).fetchall()
 
     dry_run = os.getenv("FORM_DRY_RUN", "true").lower() == "true"
@@ -1794,8 +1828,9 @@ def list_form_adapters(user: CurrentUser) -> dict[str, Any]:
 
 
 @app.get("/api/contact-forms")
-def list_contact_forms(user: CurrentUser) -> dict[str, Any]:
+def list_contact_forms(request: Request, user: CurrentUser) -> dict[str, Any]:
     init_db()
+    browser_client_id = get_browser_client_id(request)
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
@@ -1811,17 +1846,18 @@ def list_contact_forms(user: CurrentUser) -> dict[str, Any]:
                 d.checked_at
             FROM contact_form_discoveries d
             JOIN leads l ON l.id = d.lead_id
-            WHERE d.user_id = ? AND d.form_url <> ''
+            WHERE d.user_id = ? AND COALESCE(d.browser_client_id, '') = ? AND d.form_url <> ''
             ORDER BY d.checked_at DESC, l.name ASC
             """,
-            (user["id"],),
+            (user["id"], browser_client_id),
         ).fetchall()
     return {"items": [dict(r) for r in rows], "count": len(rows)}
 
 
 @app.get("/api/contact-forms/autofill-data")
-def get_contact_form_autofill_data(user: CurrentUser, limit: int = Query(50, ge=1, le=500)) -> dict[str, Any]:
+def get_contact_form_autofill_data(request: Request, user: CurrentUser, limit: int = Query(50, ge=1, le=500)) -> dict[str, Any]:
     init_db()
+    browser_client_id = get_browser_client_id(request)
     settings = get_inquiry_settings_data(int(user["id"]))
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
@@ -1835,26 +1871,27 @@ def get_contact_form_autofill_data(user: CurrentUser, limit: int = Query(50, ge=
                 d.checked_at
             FROM contact_form_discoveries d
             JOIN leads l ON l.id = d.lead_id
-            WHERE d.user_id = ? AND d.form_url <> ''
+            WHERE d.user_id = ? AND COALESCE(d.browser_client_id, '') = ? AND d.form_url <> ''
             ORDER BY d.checked_at DESC, l.name ASC
             LIMIT ?
             """,
-            (user["id"], limit),
+            (user["id"], browser_client_id, limit),
         ).fetchall()
     return {"settings": settings, "items": [dict(r) for r in rows], "count": len(rows)}
 
 
 @app.post("/api/contact-forms/discover")
-async def discover_contact_forms(payload: LeadSelectionRequest, user: CurrentUser) -> dict[str, Any]:
+async def discover_contact_forms(request: Request, payload: LeadSelectionRequest, user: CurrentUser) -> dict[str, Any]:
     init_db()
+    browser_client_id = get_browser_client_id(request)
     if not payload.lead_ids:
         raise HTTPException(status_code=400, detail="対象企業を選択してください")
 
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            f"SELECT id, name, website FROM leads WHERE id IN ({','.join(['?'] * len(payload.lead_ids))}) AND user_id = ?",
-            [*payload.lead_ids, user["id"]],
+            f"SELECT id, name, website FROM leads WHERE id IN ({','.join(['?'] * len(payload.lead_ids))}) AND user_id = ? AND COALESCE(browser_client_id, '') = ?",
+            [*payload.lead_ids, user["id"], browser_client_id],
         ).fetchall()
 
     leads = [dict(r) for r in rows]
@@ -1895,18 +1932,19 @@ async def discover_contact_forms(payload: LeadSelectionRequest, user: CurrentUse
             item = found_by_lead.get(lead_id)
             if not item:
                 conn.execute(
-                    "DELETE FROM contact_form_discoveries WHERE user_id = ? AND lead_id = ?",
-                    (user["id"], lead_id),
+                    "DELETE FROM contact_form_discoveries WHERE user_id = ? AND lead_id = ? AND COALESCE(browser_client_id, '') = ?",
+                    (user["id"], lead_id, browser_client_id),
                 )
                 continue
 
             conn.execute(
                 """
-                INSERT INTO contact_form_discoveries (user_id, lead_id, website, form_url, source, confidence, checked_at, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO contact_form_discoveries (user_id, lead_id, website, form_url, browser_client_id, source, confidence, checked_at, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(user_id, lead_id) DO UPDATE SET
                     website=excluded.website,
                     form_url=excluded.form_url,
+                    browser_client_id=excluded.browser_client_id,
                     source=excluded.source,
                     confidence=excluded.confidence,
                     checked_at=excluded.checked_at,
@@ -1917,6 +1955,7 @@ async def discover_contact_forms(payload: LeadSelectionRequest, user: CurrentUse
                     item["lead_id"],
                     item["website"],
                     item["form_url"],
+                    browser_client_id,
                     item["source"],
                     item["confidence"],
                     item["checked_at"],
@@ -2281,17 +2320,19 @@ def render_contact_body_template(body: str, lead: dict[str, Any]) -> str:
     return out
 
 
-def upsert_lead(item: dict[str, Any], user_id: int | None = None) -> bool:
+def upsert_lead(item: dict[str, Any], user_id: int | None = None, browser_client_id: str = "") -> bool:
     now = now_iso()
+    scoped_place_id = scope_place_id(item.get("place_id", ""), browser_client_id or item.get("browser_client_id", ""))
+    normalized_client_id = normalize_browser_client_id(browser_client_id or item.get("browser_client_id", ""))
     with sqlite3.connect(DB_PATH) as conn:
         existing = conn.execute(
             "SELECT id FROM leads WHERE place_id = ?",
-            (item.get("place_id", ""),),
+            (scoped_place_id,),
         ).fetchone()
         conn.execute(
             """
-            INSERT INTO leads (name, place_id, website, phone, email, address, category, industry, rating, user_ratings_total, raw_types, postal_code, prefecture, city, address_detail, address_components_json, user_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO leads (name, place_id, website, phone, email, address, category, industry, rating, user_ratings_total, raw_types, postal_code, prefecture, city, address_detail, address_components_json, user_id, browser_client_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(place_id) DO UPDATE SET
                 name=CASE WHEN TRIM(COALESCE(excluded.name, '')) <> '' THEN excluded.name ELSE leads.name END,
                 website=CASE WHEN TRIM(COALESCE(excluded.website, '')) <> '' THEN excluded.website ELSE leads.website END,
@@ -2309,11 +2350,12 @@ def upsert_lead(item: dict[str, Any], user_id: int | None = None) -> bool:
                 address_detail=CASE WHEN TRIM(COALESCE(excluded.address_detail, '')) <> '' THEN excluded.address_detail ELSE leads.address_detail END,
                 address_components_json=CASE WHEN TRIM(COALESCE(excluded.address_components_json, '')) <> '' THEN excluded.address_components_json ELSE leads.address_components_json END,
                 user_id=COALESCE(excluded.user_id, leads.user_id),
+                browser_client_id=CASE WHEN TRIM(COALESCE(excluded.browser_client_id, '')) <> '' THEN excluded.browser_client_id ELSE leads.browser_client_id END,
                 updated_at=excluded.updated_at
             """,
             (
                 item.get("name", ""),
-                item.get("place_id", ""),
+                scoped_place_id,
                 item.get("website", ""),
                 item.get("phone", ""),
                 normalize_email(item.get("email", "")) if item.get("email") else "",
@@ -2329,6 +2371,7 @@ def upsert_lead(item: dict[str, Any], user_id: int | None = None) -> bool:
                 item.get("address_detail", ""),
                 item.get("address_components_json", ""),
                 user_id,
+                normalized_client_id,
                 now,
                 now,
             ),
@@ -2361,6 +2404,7 @@ def save_contact_log(lead_id: int, channel: str, status: str, subject: str, mess
 
 @app.get("/api/my-list")
 def get_my_list(
+    request: Request,
     user: CurrentUser,
     q: str = Query("", description="会社名や住所で検索"),
     status: str = Query("", description="マイリスト状態フィルタ"),
@@ -2369,6 +2413,7 @@ def get_my_list(
     sort_dir: str = Query("desc", description="並び順 asc/desc"),
 ) -> dict[str, Any]:
     init_db()
+    browser_client_id = get_browser_client_id(request)
 
     sql = """
         SELECT
@@ -2393,9 +2438,9 @@ def get_my_list(
         FROM my_list_items m
         JOIN leads l ON l.id = m.lead_id
         LEFT JOIN manual_tags mt ON mt.lead_id = l.id
-        WHERE m.user_id = ?
+        WHERE m.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
     """
-    params: list[Any] = [user["id"]]
+    params: list[Any] = [user["id"], browser_client_id]
 
     if q:
         like_q = f"%{q}%"
@@ -2442,12 +2487,24 @@ def get_my_list(
         rows = conn.execute(sql, params).fetchall()
 
         statuses = conn.execute(
-            "SELECT DISTINCT status FROM my_list_items WHERE user_id = ? ORDER BY status",
-            (user["id"],),
+            """
+            SELECT DISTINCT m.status
+            FROM my_list_items m
+            JOIN leads l ON l.id = m.lead_id
+            WHERE m.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
+            ORDER BY m.status
+            """,
+            (user["id"], browser_client_id),
         ).fetchall()
         priorities = conn.execute(
-            "SELECT DISTINCT priority FROM my_list_items WHERE user_id = ? ORDER BY priority",
-            (user["id"],),
+            """
+            SELECT DISTINCT m.priority
+            FROM my_list_items m
+            JOIN leads l ON l.id = m.lead_id
+            WHERE m.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
+            ORDER BY m.priority
+            """,
+            (user["id"], browser_client_id),
         ).fetchall()
 
     return {
@@ -2464,8 +2521,9 @@ def get_my_list(
 
 
 @app.post("/api/my-list")
-def add_to_my_list(payload: MyListBulkAddRequest, user: CurrentUser) -> dict[str, Any]:
+def add_to_my_list(request: Request, payload: MyListBulkAddRequest, user: CurrentUser) -> dict[str, Any]:
     init_db()
+    browser_client_id = get_browser_client_id(request)
     if not payload.lead_ids:
         raise HTTPException(status_code=400, detail="対象企業を選択してください")
 
@@ -2479,8 +2537,8 @@ def add_to_my_list(payload: MyListBulkAddRequest, user: CurrentUser) -> dict[str
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         existing_rows = conn.execute(
-            f"SELECT id FROM leads WHERE id IN ({','.join(['?'] * len(payload.lead_ids))}) AND user_id = ?",
-            [*payload.lead_ids, user["id"]],
+            f"SELECT id FROM leads WHERE id IN ({','.join(['?'] * len(payload.lead_ids))}) AND user_id = ? AND COALESCE(browser_client_id, '') = ?",
+            [*payload.lead_ids, user["id"], browser_client_id],
         ).fetchall()
         valid_lead_ids = [int(r["id"]) for r in existing_rows]
 
@@ -2592,6 +2650,7 @@ def remove_my_list_item(item_id: int, user: CurrentUser) -> dict[str, Any]:
 
 @app.get("/api/contact-logs")
 def get_contact_logs(
+    request: Request,
     user: CurrentUser,
     lead_id: int | None = Query(None),
     q: str = Query("", description="企業名・件名・本文検索"),
@@ -2602,6 +2661,7 @@ def get_contact_logs(
     limit: int = Query(200, ge=1, le=1000),
 ) -> dict[str, Any]:
     init_db()
+    browser_client_id = get_browser_client_id(request)
 
     sql = """
         SELECT
@@ -2617,9 +2677,9 @@ def get_contact_logs(
             l.website AS lead_website
         FROM contact_logs c
         JOIN leads l ON l.id = c.lead_id
-        WHERE l.user_id = ?
+        WHERE l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
     """
-    params: list[Any] = [user["id"]]
+    params: list[Any] = [user["id"], browser_client_id]
 
     if lead_id is not None:
         sql += " AND c.lead_id = ?"
@@ -2652,11 +2712,12 @@ def get_contact_logs(
 
 
 @app.get("/api/leads/{lead_id}/timeline")
-def get_lead_timeline(lead_id: int, user: CurrentUser, limit: int = Query(200, ge=1, le=1000)) -> dict[str, Any]:
+def get_lead_timeline(lead_id: int, request: Request, user: CurrentUser, limit: int = Query(200, ge=1, le=1000)) -> dict[str, Any]:
     init_db()
+    browser_client_id = get_browser_client_id(request)
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
-        lead = conn.execute("SELECT * FROM leads WHERE id = ? AND user_id = ?", (lead_id, user["id"])).fetchone()
+        lead = conn.execute("SELECT * FROM leads WHERE id = ? AND user_id = ? AND COALESCE(browser_client_id, '') = ?", (lead_id, user["id"], browser_client_id)).fetchone()
         if not lead:
             raise HTTPException(status_code=404, detail="企業が見つかりません")
 

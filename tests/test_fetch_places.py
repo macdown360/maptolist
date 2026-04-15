@@ -296,6 +296,25 @@ class FetchPlacesPaginationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(payload["sender_email"], "sales@example.com")
             self.assertEqual(payload["subject"], "ご相談")
 
+    def test_browser_scoped_leads_are_isolated(self):
+        with tempfile.TemporaryDirectory() as tmpdir, patch("app.main.DB_PATH", Path(tmpdir) / "test.db"), patch("app.main.DISABLE_GOOGLE_LOGIN", True):
+            init_db()
+            upsert_lead({"name": "Browser A", "place_id": "shared-place", "website": "https://a.example.com"}, user_id=1, browser_client_id="browser-a")
+            upsert_lead({"name": "Browser B", "place_id": "shared-place", "website": "https://b.example.com"}, user_id=1, browser_client_id="browser-b")
+
+            client = TestClient(app)
+            res_a = client.get("/api/leads", headers={"X-Browser-Client-Id": "browser-a"})
+            res_b = client.get("/api/leads", headers={"X-Browser-Client-Id": "browser-b"})
+
+            self.assertEqual(res_a.status_code, 200)
+            self.assertEqual(res_b.status_code, 200)
+            items_a = res_a.json()["items"]
+            items_b = res_b.json()["items"]
+            self.assertEqual(len(items_a), 1)
+            self.assertEqual(len(items_b), 1)
+            self.assertEqual(items_a[0]["name"], "Browser A")
+            self.assertEqual(items_b[0]["name"], "Browser B")
+
 
 if __name__ == "__main__":
     unittest.main()

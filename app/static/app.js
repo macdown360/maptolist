@@ -78,6 +78,7 @@ const LEADS_CACHE_STORAGE_KEY = 'maptolist.leads_cache.v1';
 const LEADS_FILTER_STORAGE_KEY = 'maptolist.leads_filter.v1';
 const CONTACT_FORMS_CACHE_STORAGE_KEY = 'maptolist.contact_forms_cache.v1';
 const INQUIRY_SETTINGS_STORAGE_KEY = 'maptolist.inquiry_settings.v1';
+const BROWSER_CLIENT_ID_STORAGE_KEY = 'maptolist.browser_client_id.v1';
 const API_BASE_URL = String(window.__API_BASE_URL || '').trim().replace(/\/$/, '');
 const IS_GITHUB_PAGES = window.location.hostname.endsWith('github.io');
 const IS_PLACEHOLDER_API_BASE_URL = API_BASE_URL === 'https://YOUR-BACKEND-URL';
@@ -177,6 +178,18 @@ function maskApiKey(key) {
   return key.length >= 10 ? `${key.slice(0, 6)}...${key.slice(-4)}` : 'configured';
 }
 
+function getBrowserClientId() {
+  try {
+    const existing = String(window.localStorage.getItem(BROWSER_CLIENT_ID_STORAGE_KEY) || '').trim();
+    if (existing) return existing;
+    const nextId = window.crypto?.randomUUID?.() || `browser-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    window.localStorage.setItem(BROWSER_CLIENT_ID_STORAGE_KEY, nextId);
+    return nextId;
+  } catch {
+    return `browser-${Date.now()}`;
+  }
+}
+
 function getStoredInquirySettings() {
   return getStoredJson(INQUIRY_SETTINGS_STORAGE_KEY, {
     sender_company: '',
@@ -206,18 +219,9 @@ function hydrateInquirySettingsForm(settings = getStoredInquirySettings()) {
 
 async function fetchInquirySettings() {
   if (!inquirySettingsForm) return;
-  try {
-    const res = await apiFetch('/api/inquiry-settings');
-    if (!res) return;
-    const data = await res.json();
-    if (!res.ok) return;
-    setStoredJson(INQUIRY_SETTINGS_STORAGE_KEY, data);
-    hydrateInquirySettingsForm(data);
-    renderContactFormAssist();
-    applyInquirySettingsToContactForm();
-  } catch {
-    hydrateInquirySettingsForm();
-  }
+  hydrateInquirySettingsForm();
+  renderContactFormAssist();
+  applyInquirySettingsToContactForm();
 }
 
 function applyInquirySettingsToContactForm() {
@@ -300,9 +304,13 @@ async function apiFetch(url, options = {}) {
     requestUrl = `${API_BASE_URL}${requestUrl}`;
   }
 
+  const requestHeaders = new Headers(options.headers || {});
+  requestHeaders.set('X-Browser-Client-Id', getBrowserClientId());
+
   const requestOptions = {
     credentials: API_BASE_URL ? 'include' : 'same-origin',
     ...options,
+    headers: requestHeaders,
   };
 
   let res;
@@ -1035,7 +1043,12 @@ async function fetchLeads() {
     return;
   }
 
-  currentItems = sortLeadItemsClientSide(data.items || [], leadSortBy, leadSortDir);
+  const serverItems = Array.isArray(data.items) ? data.items : [];
+  const cached = getStoredJson(LEADS_CACHE_STORAGE_KEY, {});
+  const cachedItems = Array.isArray(cached.items) ? cached.items : [];
+  const isUnfiltered = !String(params.get('q') || '').trim() && !String(params.get('category') || '').trim() && !String(params.get('industry') || '').trim();
+
+  currentItems = sortLeadItemsClientSide(serverItems.length ? serverItems : (isUnfiltered ? cachedItems : []), leadSortBy, leadSortDir);
   if (data.sort) {
     leadSortBy = data.sort.sort_by || leadSortBy;
     leadSortDir = data.sort.sort_dir || leadSortDir;
@@ -1275,10 +1288,11 @@ async function fetchContactForms() {
 }
 
 async function downloadAutofillDataJson() {
-  const fallbackPayload = {
+  const basePayload = {
     settings: getStoredInquirySettings(),
     items: getStoredContactFormItems(),
     exported_at: new Date().toISOString(),
+    browser_client_id: getBrowserClientId(),
   };
 
   try {
@@ -1287,15 +1301,15 @@ async function downloadAutofillDataJson() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || '取得失敗');
     const payload = {
-      ...data,
-      exported_at: new Date().toISOString(),
+      ...basePayload,
+      items: Array.isArray(data.items) ? data.items : basePayload.items,
     };
     downloadTextAsFile(JSON.stringify(payload, null, 2), `contact-form-autofill-${new Date().toISOString().slice(0, 10)}.json`, 'application/json;charset=utf-8;');
     showToast('Puppeteer用データを保存しました', 'success');
     return;
   } catch {
-    downloadTextAsFile(JSON.stringify(fallbackPayload, null, 2), `contact-form-autofill-${new Date().toISOString().slice(0, 10)}.json`, 'application/json;charset=utf-8;');
-    showToast('保存済みデータからJSONを出力しました', 'info');
+    downloadTextAsFile(JSON.stringify(basePayload, null, 2), `contact-form-autofill-${new Date().toISOString().slice(0, 10)}.json`, 'application/json;charset=utf-8;');
+    showToast('このブラウザに保存されたデータからJSONを出力しました', 'info');
   }
 }
 
@@ -1824,28 +1838,12 @@ inquirySettingsForm?.addEventListener('submit', async (e) => {
   };
 
   setStoredJson(INQUIRY_SETTINGS_STORAGE_KEY, payload);
-
-  try {
-    const res = await apiFetch('/api/inquiry-settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (res) {
-      const data = await res.json();
-      if (res.ok) {
-        setStoredJson(INQUIRY_SETTINGS_STORAGE_KEY, data);
-      }
-    }
-    if (inquirySettingsResult) inquirySettingsResult.textContent = '問い合わせフォーム入力内容を保存しました';
-  } catch {
-    if (inquirySettingsResult) inquirySettingsResult.textContent = 'ブラウザに問い合わせフォーム入力内容を保存しました';
-  }
+  if (inquirySettingsResult) inquirySettingsResult.textContent = 'このブラウザに問い合わせフォーム入力内容を保存しました';
 
   renderContactFormAssist();
   applyInquirySettingsToContactForm();
   showToast('問い合わせ内容を保存しました', 'success');
-  addActivity('問い合わせフォーム入力設定を更新しました。', 'user');
+  addActivity('問い合わせフォーム入力設定をこのブラウザに保存しました。', 'user');
 });
 
 auditRefresh?.addEventListener('click', fetchAuditLogs);
