@@ -224,6 +224,13 @@ body {
   align-items: end;
 }
 
+#inquiry-settings-form .save-inquiry-btn {
+  width: auto;
+  min-width: 220px;
+  white-space: nowrap;
+  justify-self: start;
+}
+
 .inline-actions {
   margin-top: 10px;
   display: grid;
