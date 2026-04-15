@@ -42,6 +42,31 @@
             <button type="submit">保存</button>
           </form>
           <p id="google-key-status" class="muted"></p>
+
+          <h3>問い合わせフォーム入力設定</h3>
+          <form id="inquiry-settings-form" class="form-grid compact">
+            <label>自社名
+              <input name="sender_company" placeholder="例: 株式会社サンプル" />
+            </label>
+            <label>担当者名
+              <input name="sender_name" placeholder="例: 山田 太郎" />
+            </label>
+            <label>メールアドレス
+              <input name="sender_email" type="email" placeholder="example@company.jp" />
+            </label>
+            <label>電話番号
+              <input name="sender_phone" placeholder="03-1234-5678" />
+            </label>
+            <label>件名
+              <input name="subject" placeholder="お問い合わせの件" />
+            </label>
+            <label style="grid-column: 1 / -1;">本文
+              <textarea name="body" rows="6" placeholder="お問い合わせ本文を入力してください。{{target_company_name}} や {{target_website}} も使えます。"></textarea>
+            </label>
+            <button type="submit">問い合わせ内容を保存</button>
+          </form>
+          <p id="inquiry-settings-result" class="muted">保存した内容は、問い合わせフォームURLを開く際に自動でコピーされます。</p>
+
           <div class="simple-list">
             <div class="row"><strong>作業手順</strong></div>
             <div class="row">1. Google Cloudをお持ちでない場合: Googleアカウント作成 → Google Cloud Console にサインイン</div>
