@@ -1475,23 +1475,10 @@ contactFormsTbody?.addEventListener('click', (e) => {
   const link = target.closest('.open-form-link');
   if (!link) return;
 
-  e.preventDefault();
-  e.stopPropagation();
-  if (typeof e.stopImmediatePropagation === 'function') {
-    e.stopImmediatePropagation();
-  }
-
-  const formUrl = String(link.dataset.formUrl || '').trim();
-  if (!formUrl) return;
-
-  const popup = window.open('', '_blank', 'noopener,noreferrer');
-  if (popup) {
-    popup.opener = null;
-    popup.location.href = formUrl;
-  }
-
+  const formUrl = String(link.getAttribute('href') || '').trim();
   const leadName = String(link.dataset.leadName || '').trim();
-  showToast('フォームを新しいタブで開きました', 'info');
+
+  showToast('フォームを新しいタブで開いています', 'info');
   addActivity(`問い合わせフォームを開きました: ${leadName || formUrl}`, 'user');
 });
 
