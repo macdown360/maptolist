@@ -1,0 +1,11 @@
+{
+  "name": "maptolist",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "autofill-forms": "node scripts/autofill_contact_forms.mjs"
+  },
+  "dependencies": {
+    "puppeteer": "^24.7.2"
+  }
+}

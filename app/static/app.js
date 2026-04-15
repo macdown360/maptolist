@@ -59,6 +59,7 @@ const leadSelectAll = document.querySelector('#select-all');
 const exportCsvBtn = document.querySelector('#export-csv-btn');
 const exportExcelBtn = document.querySelector('#export-excel-btn');
 const discoverContactFormsBtn = document.querySelector('#discover-contact-forms-btn');
+const downloadAutofillJsonBtn = document.querySelector('#download-autofill-json-btn');
 const myListSelectAll = document.querySelector('#my-list-select-all');
 const addToMyListBtn = document.querySelector('#add-to-my-list');
 const myListSendBtn = document.querySelector('#my-list-send-btn');
@@ -195,13 +196,28 @@ function renderInquiryTemplate(template, varsMap = {}) {
   return out;
 }
 
-function hydrateInquirySettingsForm() {
+function hydrateInquirySettingsForm(settings = getStoredInquirySettings()) {
   if (!inquirySettingsForm) return;
-  const settings = getStoredInquirySettings();
-  Object.entries(settings).forEach(([key, value]) => {
+  Object.entries(settings || {}).forEach(([key, value]) => {
     const field = inquirySettingsForm.querySelector(`[name="${key}"]`);
     if (field) field.value = value || '';
   });
+}
+
+async function fetchInquirySettings() {
+  if (!inquirySettingsForm) return;
+  try {
+    const res = await apiFetch('/api/inquiry-settings');
+    if (!res) return;
+    const data = await res.json();
+    if (!res.ok) return;
+    setStoredJson(INQUIRY_SETTINGS_STORAGE_KEY, data);
+    hydrateInquirySettingsForm(data);
+    renderContactFormAssist();
+    applyInquirySettingsToContactForm();
+  } catch {
+    hydrateInquirySettingsForm();
+  }
 }
 
 function applyInquirySettingsToContactForm() {
@@ -1258,6 +1274,31 @@ async function fetchContactForms() {
   if (contactFormsResult) contactFormsResult.textContent = `${items.length}件の問い合わせフォームURLを表示中`;
 }
 
+async function downloadAutofillDataJson() {
+  const fallbackPayload = {
+    settings: getStoredInquirySettings(),
+    items: getStoredContactFormItems(),
+    exported_at: new Date().toISOString(),
+  };
+
+  try {
+    const res = await apiFetch('/api/contact-forms/autofill-data?limit=200');
+    if (!res) return;
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '取得失敗');
+    const payload = {
+      ...data,
+      exported_at: new Date().toISOString(),
+    };
+    downloadTextAsFile(JSON.stringify(payload, null, 2), `contact-form-autofill-${new Date().toISOString().slice(0, 10)}.json`, 'application/json;charset=utf-8;');
+    showToast('Puppeteer用データを保存しました', 'success');
+    return;
+  } catch {
+    downloadTextAsFile(JSON.stringify(fallbackPayload, null, 2), `contact-form-autofill-${new Date().toISOString().slice(0, 10)}.json`, 'application/json;charset=utf-8;');
+    showToast('保存済みデータからJSONを出力しました', 'info');
+  }
+}
+
 async function discoverSelectedContactForms() {
   const lead_ids = getSelectedLeadIds();
   if (!lead_ids.length) {
@@ -1783,7 +1824,24 @@ inquirySettingsForm?.addEventListener('submit', async (e) => {
   };
 
   setStoredJson(INQUIRY_SETTINGS_STORAGE_KEY, payload);
-  if (inquirySettingsResult) inquirySettingsResult.textContent = '問い合わせフォーム入力内容を保存しました';
+
+  try {
+    const res = await apiFetch('/api/inquiry-settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res) {
+      const data = await res.json();
+      if (res.ok) {
+        setStoredJson(INQUIRY_SETTINGS_STORAGE_KEY, data);
+      }
+    }
+    if (inquirySettingsResult) inquirySettingsResult.textContent = '問い合わせフォーム入力内容を保存しました';
+  } catch {
+    if (inquirySettingsResult) inquirySettingsResult.textContent = 'ブラウザに問い合わせフォーム入力内容を保存しました';
+  }
+
   renderContactFormAssist();
   applyInquirySettingsToContactForm();
   showToast('問い合わせ内容を保存しました', 'success');
@@ -1802,6 +1860,7 @@ leadSelectAll?.addEventListener('change', (e) => {
 exportCsvBtn?.addEventListener('click', exportSelectedLeadsAsCsv);
 exportExcelBtn?.addEventListener('click', exportSelectedLeadsAsExcel);
 discoverContactFormsBtn?.addEventListener('click', discoverSelectedContactForms);
+downloadAutofillJsonBtn?.addEventListener('click', downloadAutofillDataJson);
 
 myListSelectAll?.addEventListener('change', (e) => {
   const checked = e.target.checked;
@@ -1820,3 +1879,4 @@ loadUserBadge();
 fetchLeads();
 fetchGoogleKeyStatus();
 fetchPlaceTypes();
+fetchInquirySettings();

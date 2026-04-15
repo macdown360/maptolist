@@ -146,7 +146,11 @@
         <div class="panel">
           <h3>問い合わせフォーム一覧</h3>
           <p class="muted">取得結果一覧で選択した企業のWebサイトから、問い合わせフォームURLを自動検出した結果だけを表示します。</p>
-          <p id="contact-forms-result" class="muted"></p>
+          <div class="export-tools">
+            <button type="button" id="download-autofill-json-btn" class="ghost">Puppeteer自動入力データ出力</button>
+            <p id="contact-forms-result" class="muted"></p>
+          </div>
+          <p class="muted">送信前の最終確認と送信は手動のまま、会社名・氏名・電話番号・メールアドレス・件名・本文などの汎用項目だけをPuppeteerで自動入力できます。</p>
           <div class="table-wrap">
             <table id="contact-forms-table">
               <thead>
