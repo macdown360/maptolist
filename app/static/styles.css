@@ -563,6 +563,35 @@ td {
   text-align: center;
 }
 
+.assist-panel {
+  margin-top: 14px;
+  background: #f8fbff;
+}
+
+.assist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.assist-inline {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.assist-block {
+  display: grid;
+  gap: 8px;
+}
+
+.copy-assist-btn {
+  width: auto;
+  min-width: 92px;
+  white-space: nowrap;
+}
+
 .table-link {
   display: inline-block;
   color: #2e5fa8;

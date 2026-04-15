@@ -35,6 +35,8 @@ const leadsThead = document.querySelector('#lead-table thead');
 const myListTbody = document.querySelector('#my-list-table tbody');
 const historyTbody = document.querySelector('#history-table tbody');
 const contactFormsTbody = document.querySelector('#contact-forms-table tbody');
+const contactFormAssist = document.querySelector('#contact-form-assist');
+const contactFormAssistNote = document.querySelector('#contact-form-assist-note');
 
 const categorySelect = document.querySelector('select[name="category"]');
 const industrySelect = document.querySelector('select[name="industry"]');
@@ -51,6 +53,7 @@ const historySummary = document.querySelector('#history-summary');
 const toast = document.querySelector('#toast');
 
 const timelineMessageMap = new Map();
+let currentInquiryAssistValues = {};
 
 const leadSelectAll = document.querySelector('#select-all');
 const exportCsvBtn = document.querySelector('#export-csv-btn');
@@ -214,7 +217,7 @@ function applyInquirySettingsToContactForm() {
   }
 }
 
-function buildInquiryAssistText(leadName, formUrl, website) {
+function buildInquiryAssistPayload(leadName, formUrl, website) {
   const settings = getStoredInquirySettings();
   const varsMap = {
     sender_company: settings.sender_company || '',
@@ -226,18 +229,45 @@ function buildInquiryAssistText(leadName, formUrl, website) {
     form_url: formUrl || '',
   };
 
-  const subject = renderInquiryTemplate(settings.subject || '', varsMap).trim();
-  const body = renderInquiryTemplate(settings.body || '', varsMap).trim();
+  const payload = {
+    sender_company: renderInquiryTemplate(settings.sender_company || '', varsMap).trim(),
+    sender_name: renderInquiryTemplate(settings.sender_name || '', varsMap).trim(),
+    sender_email: renderInquiryTemplate(settings.sender_email || '', varsMap).trim(),
+    sender_phone: renderInquiryTemplate(settings.sender_phone || '', varsMap).trim(),
+    subject: renderInquiryTemplate(settings.subject || '', varsMap).trim(),
+    body: renderInquiryTemplate(settings.body || '', varsMap).trim(),
+  };
 
-  return [
-    settings.sender_company ? `自社名: ${settings.sender_company}` : '',
-    settings.sender_name ? `担当者名: ${settings.sender_name}` : '',
-    settings.sender_email ? `メールアドレス: ${settings.sender_email}` : '',
-    settings.sender_phone ? `電話番号: ${settings.sender_phone}` : '',
+  payload.fullText = [
+    payload.sender_company ? `自社名: ${payload.sender_company}` : '',
+    payload.sender_name ? `担当者名: ${payload.sender_name}` : '',
+    payload.sender_email ? `メールアドレス: ${payload.sender_email}` : '',
+    payload.sender_phone ? `電話番号: ${payload.sender_phone}` : '',
     leadName ? `送信先企業: ${leadName}` : '',
-    subject ? `件名: ${subject}` : '',
-    body ? `本文:\n${body}` : '',
+    payload.subject ? `件名: ${payload.subject}` : '',
+    payload.body ? `本文:\n${payload.body}` : '',
   ].filter(Boolean).join('\n\n');
+
+  return payload;
+}
+
+function renderContactFormAssist(leadName = '', formUrl = '', website = '') {
+  const payload = buildInquiryAssistPayload(leadName, formUrl, website);
+  currentInquiryAssistValues = payload;
+
+  if (contactFormAssistNote) {
+    contactFormAssistNote.textContent = leadName
+      ? `${leadName} 向けの入力内容を表示中です。必要な項目だけコピーして貼り付けてください。`
+      : 'フォームを開くと、ここに貼り付け用の内容を表示します。';
+  }
+
+  document.querySelectorAll('[data-assist-field]').forEach((el) => {
+    const key = String(el.dataset.assistField || '');
+    const value = payload[key] || '';
+    if ('value' in el) {
+      el.value = value;
+    }
+  });
 }
 
 async function apiFetch(url, options = {}) {
@@ -1523,22 +1553,56 @@ contactFormsTbody?.addEventListener('click', async (e) => {
   const link = target.closest('.open-form-link');
   if (!link) return;
 
+  e.preventDefault();
   const formUrl = String(link.dataset.formUrl || '').trim();
   const leadName = String(link.dataset.leadName || '').trim();
   const website = String(link.dataset.website || '').trim();
-  const assistText = buildInquiryAssistText(leadName, formUrl, website);
 
-  if (assistText) {
-    e.preventDefault();
-    try {
-      await copyTextToClipboard(assistText);
-      window.open(formUrl, '_blank', 'noopener,noreferrer');
-      showToast('入力内容をコピーしてフォームを開きました', 'success');
-      addActivity(`問い合わせフォームを開きました: ${leadName || formUrl}`, 'user');
-    } catch (_err) {
-      window.open(formUrl, '_blank', 'noopener,noreferrer');
+  renderContactFormAssist(leadName, formUrl, website);
+  const payload = buildInquiryAssistPayload(leadName, formUrl, website);
+
+  const popup = window.open(formUrl, '_blank', 'noopener,noreferrer');
+  if (!popup) {
+    window.location.href = formUrl;
+    return;
+  }
+
+  try {
+    if (payload.body) {
+      await copyTextToClipboard(payload.body);
+      showToast('本文をコピーしました。下の入力補助から他の項目もコピーできます', 'success');
+    } else if (payload.fullText) {
+      await copyTextToClipboard(payload.fullText);
+      showToast('入力内容をコピーしました', 'success');
+    } else {
       showToast('フォームを開きました', 'info');
     }
+  } catch (_err) {
+    showToast('フォームを開きました。必要に応じて下の項目をコピーしてください', 'info');
+  }
+
+  addActivity(`問い合わせフォームを開きました: ${leadName || formUrl}`, 'user');
+});
+
+contactFormAssist?.addEventListener('click', async (e) => {
+  const target = e.target;
+  if (!(target instanceof Element)) return;
+
+  const btn = target.closest('.copy-assist-btn');
+  if (!btn) return;
+
+  const field = String(btn.dataset.copyField || '').trim();
+  const value = String(currentInquiryAssistValues[field] || '').trim();
+  if (!value) {
+    showToast('コピーする内容がありません', 'info');
+    return;
+  }
+
+  try {
+    await copyTextToClipboard(value);
+    showToast('コピーしました', 'success');
+  } catch (_err) {
+    showToast('コピーに失敗しました', 'error');
   }
 });
 
@@ -1720,6 +1784,7 @@ inquirySettingsForm?.addEventListener('submit', async (e) => {
 
   setStoredJson(INQUIRY_SETTINGS_STORAGE_KEY, payload);
   if (inquirySettingsResult) inquirySettingsResult.textContent = '問い合わせフォーム入力内容を保存しました';
+  renderContactFormAssist();
   applyInquirySettingsToContactForm();
   showToast('問い合わせ内容を保存しました', 'success');
   addActivity('問い合わせフォーム入力設定を更新しました。', 'user');
@@ -1749,6 +1814,7 @@ hydrateMyListFilterFromUrl();
 hydrateLeadListState();
 hydrateContactFormsState();
 hydrateInquirySettingsForm();
+renderContactFormAssist();
 applyInquirySettingsToContactForm();
 loadUserBadge();
 fetchLeads();

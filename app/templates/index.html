@@ -164,6 +164,49 @@
               </tbody>
             </table>
           </div>
+
+          <div id="contact-form-assist" class="panel assist-panel">
+            <h3>フォーム入力補助</h3>
+            <p id="contact-form-assist-note" class="muted">フォームを開くと、ここに貼り付け用の内容を表示します。</p>
+            <div class="assist-grid">
+              <label>自社名
+                <div class="assist-inline">
+                  <input id="assist-sender-company" data-assist-field="sender_company" readonly />
+                  <button type="button" class="ghost copy-assist-btn" data-copy-field="sender_company">コピー</button>
+                </div>
+              </label>
+              <label>担当者名
+                <div class="assist-inline">
+                  <input id="assist-sender-name" data-assist-field="sender_name" readonly />
+                  <button type="button" class="ghost copy-assist-btn" data-copy-field="sender_name">コピー</button>
+                </div>
+              </label>
+              <label>メールアドレス
+                <div class="assist-inline">
+                  <input id="assist-sender-email" data-assist-field="sender_email" readonly />
+                  <button type="button" class="ghost copy-assist-btn" data-copy-field="sender_email">コピー</button>
+                </div>
+              </label>
+              <label>電話番号
+                <div class="assist-inline">
+                  <input id="assist-sender-phone" data-assist-field="sender_phone" readonly />
+                  <button type="button" class="ghost copy-assist-btn" data-copy-field="sender_phone">コピー</button>
+                </div>
+              </label>
+              <label style="grid-column: 1 / -1;">件名
+                <div class="assist-inline">
+                  <input id="assist-subject" data-assist-field="subject" readonly />
+                  <button type="button" class="ghost copy-assist-btn" data-copy-field="subject">コピー</button>
+                </div>
+              </label>
+              <label style="grid-column: 1 / -1;">本文
+                <div class="assist-block">
+                  <textarea id="assist-body" data-assist-field="body" rows="7" readonly></textarea>
+                  <button type="button" class="ghost copy-assist-btn" data-copy-field="body">本文をコピー</button>
+                </div>
+              </label>
+            </div>
+          </div>
         </div>
       </section>
 
