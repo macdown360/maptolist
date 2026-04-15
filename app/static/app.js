@@ -639,12 +639,19 @@ async function applyHistoryRange(range) {
   await fetchContactLogs();
 }
 
+function formatDateOnly(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const datePart = text.includes('T') ? text.split('T')[0] : text;
+  return datePart.replaceAll('-', '/');
+}
+
 function renderContactFormsTable(items) {
   if (!contactFormsTbody) return;
   if (!Array.isArray(items) || !items.length) {
     contactFormsTbody.innerHTML = `
       <tr>
-        <td colspan="5" class="muted">まだ問い合わせフォームURLはありません。取得結果一覧で企業を選択して探索してください。</td>
+        <td colspan="4" class="muted">まだ問い合わせフォームURLはありません。取得結果一覧で企業を選択して探索してください。</td>
       </tr>
     `;
     return;
@@ -657,8 +664,7 @@ function renderContactFormsTable(items) {
           <td>${escapeHtml(item.lead_name || '')}</td>
           <td>${item.website ? `<a href="${escapeHtml(item.website)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.website)}</a>` : ''}</td>
           <td>${item.form_url ? `<a href="${escapeHtml(item.form_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.form_url)}</a>` : ''}</td>
-          <td>${escapeHtml(item.source || '')}</td>
-          <td>${escapeHtml(item.checked_at || '')}</td>
+          <td>${escapeHtml(formatDateOnly(item.checked_at || ''))}</td>
         </tr>
       `,
     )
