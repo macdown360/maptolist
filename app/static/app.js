@@ -73,11 +73,11 @@ let myListItems = [];
 let placeTypeItems = [];
 let leadSortBy = 'updated_at';
 let leadSortDir = 'desc';
-const MAPS_KEY_STORAGE_KEY = 'maptolist.google_maps_api_key';
-const LEADS_CACHE_STORAGE_KEY = 'maptolist.leads_cache.v1';
-const LEADS_FILTER_STORAGE_KEY = 'maptolist.leads_filter.v1';
-const CONTACT_FORMS_CACHE_STORAGE_KEY = 'maptolist.contact_forms_cache.v1';
-const INQUIRY_SETTINGS_STORAGE_KEY = 'maptolist.inquiry_settings.v1';
+const MAPS_KEY_STORAGE_KEY = 'maptolist.google_maps_api_key.v2';
+const LEADS_CACHE_STORAGE_KEY = 'maptolist.leads_cache.v2';
+const LEADS_FILTER_STORAGE_KEY = 'maptolist.leads_filter.v2';
+const CONTACT_FORMS_CACHE_STORAGE_KEY = 'maptolist.contact_forms_cache.v2';
+const INQUIRY_SETTINGS_STORAGE_KEY = 'maptolist.inquiry_settings.v2';
 const BROWSER_CLIENT_ID_STORAGE_KEY = 'maptolist.browser_client_id.v1';
 const API_BASE_URL = String(window.__API_BASE_URL || '').trim().replace(/\/$/, '');
 const IS_GITHUB_PAGES = window.location.hostname.endsWith('github.io');
@@ -156,9 +156,13 @@ function setStoredMapsApiKey(value) {
   }
 }
 
+function getScopedStorageKey(key) {
+  return `${key}.${getBrowserClientId()}`;
+}
+
 function getStoredJson(key, fallback) {
   try {
-    const raw = window.localStorage.getItem(key);
+    const raw = window.localStorage.getItem(getScopedStorageKey(key));
     return raw ? JSON.parse(raw) : fallback;
   } catch {
     return fallback;
@@ -167,7 +171,7 @@ function getStoredJson(key, fallback) {
 
 function setStoredJson(key, value) {
   try {
-    window.localStorage.setItem(key, JSON.stringify(value));
+    window.localStorage.setItem(getScopedStorageKey(key), JSON.stringify(value));
   } catch {
     // noop
   }
@@ -1044,11 +1048,7 @@ async function fetchLeads() {
   }
 
   const serverItems = Array.isArray(data.items) ? data.items : [];
-  const cached = getStoredJson(LEADS_CACHE_STORAGE_KEY, {});
-  const cachedItems = Array.isArray(cached.items) ? cached.items : [];
-  const isUnfiltered = !String(params.get('q') || '').trim() && !String(params.get('category') || '').trim() && !String(params.get('industry') || '').trim();
-
-  currentItems = sortLeadItemsClientSide(serverItems.length ? serverItems : (isUnfiltered ? cachedItems : []), leadSortBy, leadSortDir);
+  currentItems = sortLeadItemsClientSide(serverItems, leadSortBy, leadSortDir);
   if (data.sort) {
     leadSortBy = data.sort.sort_by || leadSortBy;
     leadSortDir = data.sort.sort_dir || leadSortDir;
@@ -1281,7 +1281,7 @@ async function fetchContactForms() {
   }
 
   const serverItems = Array.isArray(data.items) ? data.items : [];
-  const items = serverItems.length ? mergeContactFormItems(getStoredContactFormItems(), serverItems) : getStoredContactFormItems();
+  const items = mergeContactFormItems([], serverItems);
   renderContactFormsTable(items);
   persistContactFormsState(items);
   if (contactFormsResult) contactFormsResult.textContent = `${items.length}件の問い合わせフォームURLを表示中`;
