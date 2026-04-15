@@ -20,6 +20,7 @@ const myListAddResult = document.querySelector('#my-list-add-result');
 const myListResult = document.querySelector('#my-list-result');
 const historyResult = document.querySelector('#history-result');
 const exportResult = document.querySelector('#export-result');
+const contactFormsResult = document.querySelector('#contact-forms-result');
 
 const suppressionList = document.querySelector('#suppression-list');
 const adapterList = document.querySelector('#adapter-list');
@@ -31,6 +32,7 @@ const leadsTbody = document.querySelector('#lead-table tbody');
 const leadsThead = document.querySelector('#lead-table thead');
 const myListTbody = document.querySelector('#my-list-table tbody');
 const historyTbody = document.querySelector('#history-table tbody');
+const contactFormsTbody = document.querySelector('#contact-forms-table tbody');
 
 const categorySelect = document.querySelector('select[name="category"]');
 const industrySelect = document.querySelector('select[name="industry"]');
@@ -51,6 +53,7 @@ const timelineMessageMap = new Map();
 const leadSelectAll = document.querySelector('#select-all');
 const exportCsvBtn = document.querySelector('#export-csv-btn');
 const exportExcelBtn = document.querySelector('#export-excel-btn');
+const discoverContactFormsBtn = document.querySelector('#discover-contact-forms-btn');
 const myListSelectAll = document.querySelector('#my-list-select-all');
 const addToMyListBtn = document.querySelector('#add-to-my-list');
 const myListSendBtn = document.querySelector('#my-list-send-btn');
@@ -236,6 +239,7 @@ function switchView(viewName) {
   if (viewName === 'audit') fetchAuditLogs();
   if (viewName === 'my-list') fetchMyList();
   if (viewName === 'history') fetchContactLogs();
+  if (viewName === 'contact-forms') fetchContactForms();
 }
 
 document.querySelector('#view-menu').addEventListener('click', (e) => {
@@ -635,6 +639,32 @@ async function applyHistoryRange(range) {
   await fetchContactLogs();
 }
 
+function renderContactFormsTable(items) {
+  if (!contactFormsTbody) return;
+  if (!Array.isArray(items) || !items.length) {
+    contactFormsTbody.innerHTML = `
+      <tr>
+        <td colspan="5" class="muted">まだ問い合わせフォームURLはありません。取得結果一覧で企業を選択して探索してください。</td>
+      </tr>
+    `;
+    return;
+  }
+
+  contactFormsTbody.innerHTML = items
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(item.lead_name || '')}</td>
+          <td>${item.website ? `<a href="${escapeHtml(item.website)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.website)}</a>` : ''}</td>
+          <td>${item.form_url ? `<a href="${escapeHtml(item.form_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.form_url)}</a>` : ''}</td>
+          <td>${escapeHtml(item.source || '')}</td>
+          <td>${escapeHtml(item.checked_at || '')}</td>
+        </tr>
+      `,
+    )
+    .join('');
+}
+
 function getSelectedLeadIds() {
   return Array.from(document.querySelectorAll('.lead-check:checked')).map((el) => Number(el.value));
 }
@@ -1023,6 +1053,54 @@ async function sendMailToSelectedMyListItems() {
   await fetchMyList();
   await fetchContactLogs();
   await fetchLeads();
+}
+
+async function fetchContactForms() {
+  if (!contactFormsTbody) return;
+  const res = await apiFetch('/api/contact-forms');
+  if (!res) return;
+  const data = await res.json();
+  if (!res.ok) {
+    if (contactFormsResult) contactFormsResult.textContent = `エラー: ${data.detail || '取得失敗'}`;
+    return;
+  }
+
+  const items = data.items || [];
+  renderContactFormsTable(items);
+  if (contactFormsResult) contactFormsResult.textContent = `${items.length}件の問い合わせフォームURLを表示中`;
+}
+
+async function discoverSelectedContactForms() {
+  const lead_ids = getSelectedLeadIds();
+  if (!lead_ids.length) {
+    const msg = '先に企業を選択してください';
+    if (exportResult) exportResult.textContent = msg;
+    showToast(msg, 'error');
+    return;
+  }
+
+  if (exportResult) exportResult.textContent = '問い合わせフォームを探索中...';
+
+  const res = await apiFetch('/api/contact-forms/discover', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lead_ids }),
+  });
+  if (!res) return;
+  const data = await res.json();
+
+  if (!res.ok) {
+    if (exportResult) exportResult.textContent = `エラー: ${data.detail || '探索失敗'}`;
+    showToast('問い合わせフォーム探索に失敗しました', 'error');
+    return;
+  }
+
+  const msg = `探索完了: ${data.found}件 / 対象${data.checked}件`;
+  if (exportResult) exportResult.textContent = msg;
+  addActivity(`問い合わせフォーム探索: ${data.found}件見つかりました`, 'user');
+  showToast(data.found ? '問い合わせフォームURLを取得しました' : '問い合わせフォームは見つかりませんでした', data.found ? 'success' : 'info');
+  switchView('contact-forms');
+  await fetchContactForms();
 }
 
 async function fetchSuppressions() {
@@ -1451,6 +1529,7 @@ leadSelectAll?.addEventListener('change', (e) => {
 
 exportCsvBtn?.addEventListener('click', exportSelectedLeadsAsCsv);
 exportExcelBtn?.addEventListener('click', exportSelectedLeadsAsExcel);
+discoverContactFormsBtn?.addEventListener('click', discoverSelectedContactForms);
 
 myListSelectAll?.addEventListener('change', (e) => {
   const checked = e.target.checked;

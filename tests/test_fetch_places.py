@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.main import fetch_places, init_db, split_jp_address, upsert_lead
+from app.main import discover_contact_form_url, fetch_places, init_db, split_jp_address, upsert_lead
 
 
 class FakeResponse:
@@ -135,6 +135,36 @@ class FallbackDetailClient(FakeAsyncClient):
         return FakeResponse({})
 
 
+class FakeContactFormClient:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def get(self, url, params=None, follow_redirects=False):
+        if url == "https://example.com":
+            return FakeResponse({}, text='''
+                <html><body>
+                  <a href="/company">会社概要</a>
+                  <a href="/contact">お問い合わせ</a>
+                </body></html>
+            ''')
+        if url == "https://example.com/contact":
+            return FakeResponse({}, text='''
+                <html><body>
+                  <h1>お問い合わせフォーム</h1>
+                  <form action="/send" method="post">
+                    <input type="text" name="name" />
+                    <input type="email" name="email" />
+                    <textarea name="message"></textarea>
+                    <button type="submit">送信</button>
+                  </form>
+                </body></html>
+            ''')
+        return FakeResponse({}, text="<html><body>No form</body></html>")
+
+
 class FetchPlacesPaginationTests(unittest.IsolatedAsyncioTestCase):
     async def test_fetch_places_retries_next_page_token_until_max_results(self):
         with patch("app.main.httpx.AsyncClient", FakeAsyncClient), patch(
@@ -164,6 +194,12 @@ class FetchPlacesPaginationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(items), 2)
         self.assertEqual(items[0]["rating"], 4.8)
         self.assertEqual(items[1]["user_ratings_total"], 8)
+
+    async def test_discover_contact_form_url_finds_contact_page(self):
+        async with FakeContactFormClient() as client:
+            url = await discover_contact_form_url(client, "https://example.com")
+
+        self.assertEqual(url, "https://example.com/contact")
 
     def test_split_jp_address_keeps_full_city_name(self):
         parts = split_jp_address("日本、〒272-0023 千葉県市川市南八幡４丁目２−５")

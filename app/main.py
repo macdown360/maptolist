@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import ipaddress
 import json
 import os
 import re
@@ -8,9 +9,10 @@ import sqlite3
 from contextlib import closing
 from datetime import UTC, datetime, timedelta
 from email.mime.text import MIMEText
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Annotated, Any
-from urllib.parse import quote_plus, urlparse
+from urllib.parse import quote_plus, urljoin, urlparse
 import smtplib
 
 import httpx
@@ -51,6 +53,45 @@ DEMO_USER_EMAIL = "demo@local"
 DEMO_USER_NAME = "Demo User"
 MY_LIST_STATUS_VALUES = {"new", "contacted", "nurturing", "closed", "excluded"}
 MY_LIST_PRIORITY_VALUES = {"high", "medium", "low"}
+CONTACT_PATH_HINTS = (
+    "contact",
+    "contact-us",
+    "contactus",
+    "inquiry",
+    "support",
+    "otoiawase",
+    "toiawase",
+    "form",
+    "mail",
+    "consult",
+)
+CONTACT_TEXT_HINTS = (
+    "お問い合わせ",
+    "お問合せ",
+    "問合せ",
+    "問い合わせ",
+    "資料請求",
+    "ご相談",
+    "連絡",
+    "contact",
+    "inquiry",
+    "support",
+)
+NEGATIVE_FORM_HINTS = ("newsletter", "subscribe", "search", "login", "signin", "register", "comment")
+FORM_FIELD_HINTS = ("name", "email", "mail", "message", "body", "content", "inquiry", "contact", "company", "subject", "phone", "tel", "お名前", "メール", "件名", "本文")
+COMMON_CONTACT_PATHS = (
+    "/contact",
+    "/contact/",
+    "/inquiry",
+    "/inquiry/",
+    "/contact-us",
+    "/contactus",
+    "/support",
+    "/form",
+    "/otoiawase",
+    "/toiawase",
+    "/company/contact",
+)
 
 PLACE_TYPE_LABELS: dict[str, str] = {
     "accounting": "会計事務所",
@@ -298,6 +339,10 @@ class BulkTagRequest(BaseModel):
     note: str = ""
 
 
+class LeadSelectionRequest(BaseModel):
+    lead_ids: list[int] = Field(default_factory=list)
+
+
 class MyListBulkAddRequest(BaseModel):
     lead_ids: list[int] = Field(default_factory=list)
     status: str = "new"
@@ -468,6 +513,25 @@ def init_db() -> None:
                 updated_at TEXT NOT NULL,
                 last_contacted_at TEXT,
                 contact_count INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(user_id, lead_id),
+                FOREIGN KEY (lead_id) REFERENCES leads (id),
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS contact_form_discoveries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                lead_id INTEGER NOT NULL,
+                website TEXT NOT NULL,
+                form_url TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'heuristic_crawl',
+                confidence REAL NOT NULL DEFAULT 0,
+                checked_at TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
                 UNIQUE(user_id, lead_id),
                 FOREIGN KEY (lead_id) REFERENCES leads (id),
                 FOREIGN KEY (user_id) REFERENCES users (id)
@@ -899,6 +963,226 @@ def adopt_orphan_leads(user_id: int) -> None:
 
 def is_google_oauth_configured() -> bool:
     return bool(GOOGLE_CLIENT_ID.strip() and GOOGLE_CLIENT_SECRET.strip())
+
+
+class ContactFormHTMLParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.links: list[dict[str, str]] = []
+        self.form_count = 0
+        self.form_hints: list[str] = []
+        self.text_parts: list[str] = []
+        self.title_parts: list[str] = []
+        self._current_href = ""
+        self._current_link_text: list[str] = []
+        self._in_title = False
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attr_map = {str(k).lower(): str(v or "") for k, v in attrs}
+        normalized_tag = tag.lower()
+        if normalized_tag == "a":
+            self._current_href = attr_map.get("href", "")
+            self._current_link_text = []
+        elif normalized_tag == "form":
+            self.form_count += 1
+            for key in ("action", "id", "class", "name"):
+                value = attr_map.get(key, "").strip()
+                if value:
+                    self.form_hints.append(value)
+        elif normalized_tag in {"input", "textarea", "select", "button", "label"}:
+            for key in ("type", "name", "placeholder", "aria-label", "value", "id", "class"):
+                value = attr_map.get(key, "").strip()
+                if value:
+                    self.form_hints.append(value)
+        elif normalized_tag == "title":
+            self._in_title = True
+
+    def handle_endtag(self, tag: str) -> None:
+        normalized_tag = tag.lower()
+        if normalized_tag == "a":
+            text = " ".join(self._current_link_text).strip()
+            if self._current_href:
+                self.links.append({"href": self._current_href, "text": text})
+            self._current_href = ""
+            self._current_link_text = []
+        elif normalized_tag == "title":
+            self._in_title = False
+
+    def handle_data(self, data: str) -> None:
+        text = str(data or "").strip()
+        if not text:
+            return
+        self.text_parts.append(text)
+        if self._current_href:
+            self._current_link_text.append(text)
+        if self._in_title:
+            self.title_parts.append(text)
+
+    @property
+    def title(self) -> str:
+        return " ".join(self.title_parts).strip()
+
+    @property
+    def text(self) -> str:
+        return " ".join(self.text_parts).strip()
+
+
+def normalize_website_url(website: str) -> str:
+    value = str(website or "").strip()
+    if not value:
+        return ""
+    if not re.match(r"^https?://", value, flags=re.IGNORECASE):
+        value = f"https://{value}"
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return ""
+    return f"{parsed.scheme}://{parsed.netloc}{parsed.path or ''}"
+
+
+def is_safe_public_url(url: str) -> bool:
+    parsed = urlparse(url)
+    hostname = (parsed.hostname or "").strip().lower()
+    if not hostname:
+        return False
+    if hostname in {"localhost", "127.0.0.1", "0.0.0.0"} or hostname.endswith(".local"):
+        return False
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            return False
+    except ValueError:
+        pass
+    return parsed.scheme in {"http", "https"}
+
+
+def _contains_any_hint(text: str, hints: tuple[str, ...]) -> bool:
+    lowered = str(text or "").lower()
+    return any(h.lower() in lowered for h in hints)
+
+
+def extract_candidate_contact_urls(base_url: str, html: str) -> list[str]:
+    parser = ContactFormHTMLParser()
+    parser.feed(str(html or "")[:300000])
+
+    base_domain = urlparse(base_url).netloc.lower()
+    candidates: list[str] = [base_url]
+    seen: set[str] = {base_url}
+
+    for path in COMMON_CONTACT_PATHS:
+        candidate = urljoin(base_url, path)
+        if candidate not in seen and is_safe_public_url(candidate):
+            seen.add(candidate)
+            candidates.append(candidate)
+
+    for link in parser.links:
+        href = str(link.get("href", "")).strip()
+        text = str(link.get("text", "")).strip()
+        if not href or href.startswith(("#", "mailto:", "tel:", "javascript:")):
+            continue
+        if not (_contains_any_hint(href, CONTACT_PATH_HINTS) or _contains_any_hint(text, CONTACT_TEXT_HINTS)):
+            continue
+        candidate = urljoin(base_url, href)
+        parsed = urlparse(candidate)
+        if parsed.netloc.lower() != base_domain:
+            continue
+        normalized = f"{parsed.scheme}://{parsed.netloc}{parsed.path or ''}"
+        if normalized not in seen and is_safe_public_url(normalized):
+            seen.add(normalized)
+            candidates.append(normalized)
+
+    return candidates[:12]
+
+
+def analyze_contact_page(url: str, html: str) -> dict[str, Any]:
+    parser = ContactFormHTMLParser()
+    parser.feed(str(html or "")[:300000])
+
+    path_text = f"{url} {parser.title} {parser.text} {' '.join(parser.form_hints)}"
+    positive = 0
+    for hint in CONTACT_PATH_HINTS:
+        if hint.lower() in str(url).lower():
+            positive += 3
+    for hint in CONTACT_TEXT_HINTS:
+        if hint.lower() in path_text.lower():
+            positive += 2
+    for hint in FORM_FIELD_HINTS:
+        if hint.lower() in path_text.lower():
+            positive += 1
+
+    negative = 0
+    for hint in NEGATIVE_FORM_HINTS:
+        if hint.lower() in path_text.lower():
+            negative += 3
+
+    score = positive + (parser.form_count * 4) - negative
+    has_contact_form = parser.form_count > 0 and score >= 8
+    return {
+        "url": url,
+        "title": parser.title,
+        "score": score,
+        "form_count": parser.form_count,
+        "has_contact_form": has_contact_form,
+    }
+
+
+async def fetch_html_page(client: httpx.AsyncClient, url: str) -> tuple[str, str]:
+    if not url or not is_safe_public_url(url):
+        return "", url
+    try:
+        response = await client.get(url, follow_redirects=True)
+    except Exception:  # noqa: BLE001
+        return "", url
+
+    if getattr(response, "status_code", 500) >= 400:
+        return "", str(getattr(response, "url", url))
+
+    headers = getattr(response, "headers", {}) or {}
+    content_type = str(headers.get("content-type", "")).lower()
+    if content_type and "html" not in content_type:
+        return "", str(getattr(response, "url", url))
+
+    return str(getattr(response, "text", "") or "")[:300000], str(getattr(response, "url", url))
+
+
+async def discover_contact_form_info(client: httpx.AsyncClient, website: str) -> dict[str, Any]:
+    base_url = normalize_website_url(website)
+    if not base_url:
+        return {"form_url": "", "source": "heuristic_crawl", "confidence": 0.0, "title": ""}
+
+    home_html, resolved_base = await fetch_html_page(client, base_url)
+    if not home_html:
+        return {"form_url": "", "source": "heuristic_crawl", "confidence": 0.0, "title": ""}
+
+    candidates = extract_candidate_contact_urls(resolved_base, home_html)
+    best: dict[str, Any] = {"url": "", "score": 0, "title": ""}
+    visited: set[str] = set()
+
+    for candidate in candidates:
+        if candidate in visited:
+            continue
+        visited.add(candidate)
+        html, final_url = await fetch_html_page(client, candidate)
+        if not html:
+            continue
+        analysis = analyze_contact_page(final_url, html)
+        if analysis["score"] > best["score"]:
+            best = analysis
+
+    if not best.get("has_contact_form"):
+        return {"form_url": "", "source": "heuristic_crawl", "confidence": 0.0, "title": ""}
+
+    confidence = min(0.99, max(0.5, float(best["score"]) / 20.0))
+    return {
+        "form_url": str(best.get("url", "")),
+        "source": "heuristic_crawl",
+        "confidence": confidence,
+        "title": str(best.get("title", "")),
+    }
+
+
+async def discover_contact_form_url(client: httpx.AsyncClient, website: str) -> str:
+    info = await discover_contact_form_info(client, website)
+    return str(info.get("form_url", ""))
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -1420,6 +1704,129 @@ def list_form_adapters(user: CurrentUser) -> dict[str, Any]:
         conn.row_factory = sqlite3.Row
         rows = conn.execute("SELECT * FROM form_adapters ORDER BY updated_at DESC").fetchall()
     return {"items": [dict(r) for r in rows]}
+
+
+@app.get("/api/contact-forms")
+def list_contact_forms(user: CurrentUser) -> dict[str, Any]:
+    init_db()
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT
+                d.id,
+                d.lead_id,
+                l.name AS lead_name,
+                d.website,
+                d.form_url,
+                d.source,
+                d.confidence,
+                d.checked_at
+            FROM contact_form_discoveries d
+            JOIN leads l ON l.id = d.lead_id
+            WHERE d.user_id = ? AND d.form_url <> ''
+            ORDER BY d.checked_at DESC, l.name ASC
+            """,
+            (user["id"],),
+        ).fetchall()
+    return {"items": [dict(r) for r in rows], "count": len(rows)}
+
+
+@app.post("/api/contact-forms/discover")
+async def discover_contact_forms(payload: LeadSelectionRequest, user: CurrentUser) -> dict[str, Any]:
+    init_db()
+    if not payload.lead_ids:
+        raise HTTPException(status_code=400, detail="対象企業を選択してください")
+
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            f"SELECT id, name, website FROM leads WHERE id IN ({','.join(['?'] * len(payload.lead_ids))}) AND user_id = ?",
+            [*payload.lead_ids, user["id"]],
+        ).fetchall()
+
+    leads = [dict(r) for r in rows]
+    if not leads:
+        raise HTTPException(status_code=404, detail="対象企業が見つかりません")
+
+    semaphore = asyncio.Semaphore(5)
+
+    async def inspect_lead(lead: dict[str, Any]) -> dict[str, Any] | None:
+        website = normalize_website_url(lead.get("website", ""))
+        if not website:
+            return None
+        async with semaphore:
+            info = await discover_contact_form_info(client, website)
+        form_url = str(info.get("form_url", "")).strip()
+        if not form_url:
+            return None
+        return {
+            "lead_id": int(lead["id"]),
+            "lead_name": str(lead.get("name", "")),
+            "website": website,
+            "form_url": form_url,
+            "source": str(info.get("source", "heuristic_crawl")),
+            "confidence": float(info.get("confidence", 0.0)),
+            "checked_at": now_iso(),
+        }
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        results = await asyncio.gather(*(inspect_lead(lead) for lead in leads))
+
+    found_items = [item for item in results if item]
+    found_by_lead = {int(item["lead_id"]): item for item in found_items}
+    now = now_iso()
+
+    with sqlite3.connect(DB_PATH) as conn:
+        for lead in leads:
+            lead_id = int(lead["id"])
+            item = found_by_lead.get(lead_id)
+            if not item:
+                conn.execute(
+                    "DELETE FROM contact_form_discoveries WHERE user_id = ? AND lead_id = ?",
+                    (user["id"], lead_id),
+                )
+                continue
+
+            conn.execute(
+                """
+                INSERT INTO contact_form_discoveries (user_id, lead_id, website, form_url, source, confidence, checked_at, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, lead_id) DO UPDATE SET
+                    website=excluded.website,
+                    form_url=excluded.form_url,
+                    source=excluded.source,
+                    confidence=excluded.confidence,
+                    checked_at=excluded.checked_at,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    user["id"],
+                    item["lead_id"],
+                    item["website"],
+                    item["form_url"],
+                    item["source"],
+                    item["confidence"],
+                    item["checked_at"],
+                    now,
+                    now,
+                ),
+            )
+
+    log_audit(
+        "discover_contact_forms",
+        "lead",
+        "bulk",
+        {"lead_ids": payload.lead_ids, "checked": len(leads), "found": len(found_items)},
+        actor=user["email"],
+    )
+
+    return {
+        "checked": len(leads),
+        "found": len(found_items),
+        "items": found_items,
+        "method": "heuristic_crawl",
+    }
 
 
 @app.post("/api/form-adapters")
