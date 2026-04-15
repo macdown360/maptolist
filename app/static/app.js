@@ -731,45 +731,52 @@ function exportSelectedLeadsAsExcel() {
     return;
   }
 
+  if (!window.XLSX) {
+    const msg = 'Excel出力ライブラリの読み込みに失敗しました。ページを再読み込みしてください';
+    if (exportResult) exportResult.textContent = msg;
+    showToast(msg, 'error');
+    return;
+  }
+
   const rows = exportRowsFromLeadItems(selectedItems);
-  const trHtml = rows
-    .map(
-      (row) => `<tr>
-        <td>${escapeHtml(row.id)}</td>
-        <td>${escapeHtml(row.name)}</td>
-        <td>${escapeHtml(row.address)}</td>
-        <td>${escapeHtml(row.prefecture)}</td>
-        <td>${escapeHtml(row.city)}</td>
-        <td>${escapeHtml(row.category)}</td>
-        <td>${escapeHtml(row.industry)}</td>
-        <td>${escapeHtml(row.rating)}</td>
-        <td>${escapeHtml(row.user_ratings_total)}</td>
-        <td>${escapeHtml(row.website)}</td>
-        <td>${escapeHtml(row.phone)}</td>
-        <td>${escapeHtml(row.email)}</td>
-        <td>${escapeHtml(row.updated_at)}</td>
-      </tr>`,
-    )
-    .join('');
+  const excelRows = rows.map((row) => ({
+    ID: row.id,
+    '企業・団体名': row.name,
+    '住所': row.address,
+    '都道府県': row.prefecture,
+    '市区町村': row.city,
+    '業種': row.category,
+    '業界': row.industry,
+    '評価': row.rating,
+    '評価件数': row.user_ratings_total,
+    'Web': row.website,
+    '電話': row.phone,
+    'メール': row.email,
+    '更新日時': row.updated_at,
+  }));
 
-  const tableHtml = `\ufeff<html><head><meta charset="UTF-8" /></head><body><table border="1">
-    <tr>
-      <th>ID</th>
-      <th>企業・団体名</th>
-      <th>住所</th>
-      <th>都道府県</th>
-      <th>市区町村</th>
-      <th>業種</th>
-      <th>業界</th>
-      <th>評価</th>
-      <th>評価件数</th>
-      <th>Web</th>
-      <th>電話</th>
-      <th>メール</th>
-      <th>更新日時</th>
-    </tr>${trHtml}</table></body></html>`;
+  const worksheet = window.XLSX.utils.json_to_sheet(excelRows);
+  worksheet['!cols'] = [
+    { wch: 10 },
+    { wch: 28 },
+    { wch: 36 },
+    { wch: 12 },
+    { wch: 16 },
+    { wch: 14 },
+    { wch: 18 },
+    { wch: 8 },
+    { wch: 10 },
+    { wch: 28 },
+    { wch: 18 },
+    { wch: 28 },
+    { wch: 20 },
+  ];
 
-  downloadTextAsFile(tableHtml, `map-to-list-leads-${new Date().toISOString().slice(0, 10)}.xls`, 'application/vnd.ms-excel;charset=utf-8;');
+  const workbook = window.XLSX.utils.book_new();
+  window.XLSX.utils.book_append_sheet(workbook, worksheet, 'Leads');
+  window.XLSX.writeFile(workbook, `map-to-list-leads-${new Date().toISOString().slice(0, 10)}.xlsx`, {
+    compression: true,
+  });
 
   const msg = `${rows.length}件をExcel出力しました`;
   if (exportResult) exportResult.textContent = msg;
