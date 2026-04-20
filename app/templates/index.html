@@ -20,7 +20,6 @@
       </div>
 
       <nav class="menu" id="view-menu">
-        <button class="menu-item" data-view="settings">APIキー設定</button>
         <button class="menu-item" data-view="import">データ取得</button>
         <button class="menu-item active" data-view="leads">取得結果一覧</button>
         <button class="menu-item" data-view="contact-forms">問い合わせフォーム</button>
@@ -31,34 +30,6 @@
       <header class="workspace-head">
         <h2>リスト作成ワークスペース</h2>
       </header>
-
-      <section class="view" id="view-settings">
-        <div class="panel">
-          <h3>Google Places APIキー設定</h3>
-          <form id="google-key-form" class="form-grid compact">
-            <label>GOOGLE_PLACES_API_KEY
-              <input name="api_key" type="password" required placeholder="AIza..." />
-            </label>
-            <button type="submit">保存</button>
-          </form>
-          <p id="google-key-status" class="muted"></p>
-
-          <div class="simple-list">
-            <div class="row"><strong>作業手順</strong></div>
-            <div class="row">1. Google Cloudをお持ちでない場合: Googleアカウント作成 → Google Cloud Console にサインイン</div>
-            <div class="row">2. 初回利用時は利用規約に同意し、請求先アカウント（課金）を作成する</div>
-            <div class="row">3. 「プロジェクトを選択」→「新しいプロジェクト」でプロジェクトを作成する</div>
-            <div class="row">4. 「APIとサービス」→「ライブラリ」で Places API を有効化する</div>
-            <div class="row">5. 「APIとサービス」→「認証情報」→「認証情報を作成」→「APIキー」を作成する</div>
-            <div class="row">6. 作成したキーの「APIの制限」で Places API のみ許可する</div>
-            <div class="row">7. 必要に応じて「アプリケーションの制限」を設定する（最初は制限を弱めて疎通確認推奨）</div>
-            <div class="row">8. 左メニューの「APIキー設定」でキーを入力して保存する</div>
-            <div class="row">9. 「設定済み: xxxxxx...xxxx」が表示されることを確認する</div>
-            <div class="row">10. 「データ取得」で「カフェ 東京」「自動車整備 横浜」などを指定して取り込みを実行する</div>
-            <div class="row">11. 失敗時は監査ログとGoogle Cloudのエラー（課金、API制限、リファラ/IP制限）を確認する</div>
-          </div>
-        </div>
-      </section>
 
       <section class="view" id="view-import">
         <div class="panel">

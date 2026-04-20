@@ -723,9 +723,6 @@ def scope_place_id(place_id: str, browser_client_id: str = "") -> str:
 
 
 def get_google_api_key(user: dict[str, Any] | None = None) -> str:
-    # Authenticated users must use their own stored key.
-    if user is not None:
-        return str(user.get("maps_api_key", "")).strip()
     return os.getenv("GOOGLE_PLACES_API_KEY", "").strip() or os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
 
 
@@ -1469,9 +1466,9 @@ async def import_google_places(request: Request, payload: ImportRequest, user: C
     init_db()
     adopt_orphan_leads(int(user["id"]))
     browser_client_id = get_browser_client_id(request)
-    api_key = payload.api_key.strip() or get_google_api_key(user)
+    api_key = get_google_api_key()
     if not api_key:
-        raise HTTPException(status_code=400, detail="Google Places APIキーが未設定です。APIキー設定でこのブラウザに保存してください。")
+        raise HTTPException(status_code=400, detail="Google Places APIキーがサーバーに設定されていません。")
 
     query = payload.query.strip()
     if payload.region.strip():

@@ -256,7 +256,6 @@ function switchView(viewName) {
   });
 
   if (viewName === 'suppression') fetchSuppressions();
-  if (viewName === 'settings') fetchGoogleKeyStatus();
   if (viewName === 'adapters') fetchAdapters();
   if (viewName === 'audit') fetchAuditLogs();
   if (viewName === 'my-list') fetchMyList();
@@ -1332,12 +1331,6 @@ importForm?.addEventListener('submit', async (e) => {
   importResult.textContent = '取得中...';
   const payload = Object.fromEntries(new FormData(importForm).entries());
   payload.max_results = Number(payload.max_results || 20);
-  payload.api_key = getStoredMapsApiKey();
-
-  if (!payload.api_key) {
-    importResult.textContent = '先にAPIキー設定で、このブラウザにAPIキーを保存してください';
-    return;
-  }
 
   const res = await apiFetch('/api/import/google-places', {
     method: 'POST',
@@ -1630,22 +1623,6 @@ adapterForm?.addEventListener('submit', async (e) => {
   await fetchAdapters();
 });
 
-googleKeyForm?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const formData = new FormData(googleKeyForm);
-  const key = String(formData.get('api_key') || '').trim();
-  if (!key) {
-    googleKeyStatus.textContent = '保存エラー: APIキーが空です';
-    return;
-  }
-
-  setStoredMapsApiKey(key);
-  googleKeyStatus.textContent = `APIキーをブラウザに保存しました: ${maskApiKey(key)}`;
-  addActivity('Google Places APIキーをブラウザに保存しました。', 'user');
-  googleKeyForm.reset();
-  await fetchGoogleKeyStatus();
-});
-
 auditRefresh?.addEventListener('click', fetchAuditLogs);
 
 leadSelectAll?.addEventListener('change', (e) => {
@@ -1671,7 +1648,6 @@ hydrateLeadListState();
 hydrateContactFormsState();
 loadUserBadge();
 fetchLeads();
-fetchGoogleKeyStatus();
 fetchPlaceTypes();
 fetchMyList();
 fetchContactLogs();
