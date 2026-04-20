@@ -308,7 +308,7 @@ class ImportRequest(BaseModel):
     region: str = Field("", description="任意。地域キーワード")
     place_type: str = Field("", description="任意。Google Placesの業種タイプ")
     language: str = Field("ja", description="Google Places API language")
-    max_results: int = Field(20, ge=1, le=60, description="取得件数上限")
+    max_results: int = Field(20, ge=1, le=100, description="取得件数上限")
     api_key: str = Field("", description="任意。ブラウザ保存キーをリクエストで渡す")
 
 
