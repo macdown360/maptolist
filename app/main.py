@@ -18,6 +18,9 @@ import smtplib
 import httpx
 from authlib.integrations.starlette_client import OAuth
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -276,7 +279,16 @@ TYPE_PRIORITY: list[str] = [
     "train_station",
 ]
 
+# ---------- レートリミット設定 ----------
+# /api/import/google-places への連続呼び出しを制限する
+# 環境変数 RATE_LIMIT_PLACES で上書き可能（例: "10/minute"）
+DEFAULT_RATE_LIMIT_PLACES = os.getenv("RATE_LIMIT_PLACES", "5/minute")
+DEFAULT_RATE_LIMIT_DAILY_PLACES = os.getenv("RATE_LIMIT_DAILY_PLACES", "200/day")
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(title="Map to List Lead Collector", version="0.3.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, max_age=86400 * 30, https_only=False)
 if CORS_ALLOW_ORIGINS:
     app.add_middleware(
@@ -1462,6 +1474,8 @@ def get_lead_names(request: Request, user: CurrentUser, limit: int = Query(300, 
 
 
 @app.post("/api/import/google-places")
+@limiter.limit(lambda: DEFAULT_RATE_LIMIT_PLACES)
+@limiter.limit(lambda: DEFAULT_RATE_LIMIT_DAILY_PLACES)
 async def import_google_places(request: Request, payload: ImportRequest, user: CurrentUser) -> dict[str, Any]:
     init_db()
     adopt_orphan_leads(int(user["id"]))
