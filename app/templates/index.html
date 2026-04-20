@@ -45,7 +45,7 @@
           <form id="import-form" class="form-grid">
             <label>キーワード<input name="query" required placeholder="例: 税理士 / カフェ / 自動車整備 / 不動産 東京" /></label>
             <label>地域<input name="region" placeholder="新宿区や沼津市など市区町村単位で指定すると検索時間が短くなります" /></label>
-            <label>最大件数<input type="number" name="max_results" min="1" max="100" value="20" /></label>
+            <label>最大件数<input type="number" name="max_results" min="1" max="100" value="20" /> <span class="field-note">※1度に取得できる件数は100件までです。</span></label>
             <button type="submit">取得開始</button>
           </form>
           <p id="import-result" class="muted"></p>
