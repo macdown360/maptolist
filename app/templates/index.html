@@ -30,6 +30,7 @@
       <nav class="menu" id="view-menu">
         <button class="menu-item active" data-view="import">データ取得</button>
         <button class="menu-item" data-view="leads">取得結果一覧</button>
+        <button class="menu-item" data-view="my-list">マイリスト</button>
         <button class="menu-item" data-view="contact-forms">問い合わせフォーム</button>
       </nav>
     </aside>
@@ -67,6 +68,26 @@
             <button type="button" id="discover-contact-forms-btn" class="ghost">問い合わせフォーム探索</button>
             <p id="export-result" class="muted"></p>
           </div>
+          <div class="my-list-add-tools">
+            <label>ステータス
+              <select id="my-list-default-status">
+                <option value="new">未対応</option>
+                <option value="contacted">連絡済み</option>
+                <option value="nurturing">育成中</option>
+                <option value="closed">クローズ</option>
+                <option value="excluded">除外</option>
+              </select>
+            </label>
+            <label>優先度
+              <select id="my-list-default-priority">
+                <option value="high">高</option>
+                <option value="medium" selected>中</option>
+                <option value="low">低</option>
+              </select>
+            </label>
+            <button type="button" id="add-to-my-list" class="ghost">マイリストに追加</button>
+            <p id="my-list-add-result" class="muted"></p>
+          </div>
           <div class="table-wrap">
             <table id="lead-table">
               <thead>
@@ -83,6 +104,92 @@
                   <th>Web</th>
                   <th>電話</th>
                   <th>メール</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-my-list">
+        <div class="panel">
+          <h3>マイリスト</h3>
+          <p class="muted">取得結果一覧でチェックした企業を追加して、顧客管理・商談管理にご活用ください。</p>
+
+          <div class="status-tabs">
+            <button type="button" class="status-tab active" data-status="">すべて</button>
+            <button type="button" class="status-tab" data-status="new">未対応</button>
+            <button type="button" class="status-tab" data-status="contacted">連絡済み</button>
+            <button type="button" class="status-tab" data-status="nurturing">育成中</button>
+            <button type="button" class="status-tab" data-status="closed">クローズ</button>
+            <button type="button" class="status-tab" data-status="excluded">除外</button>
+          </div>
+
+          <form id="my-list-filter-form" class="form-grid compact">
+            <label>検索<input name="q" placeholder="企業名・住所・URL" /></label>
+            <label>ステータス
+              <select name="status">
+                <option value="">すべて</option>
+                <option value="new">未対応</option>
+                <option value="contacted">連絡済み</option>
+                <option value="nurturing">育成中</option>
+                <option value="closed">クローズ</option>
+                <option value="excluded">除外</option>
+              </select>
+            </label>
+            <label>優先度
+              <select name="priority">
+                <option value="">すべて</option>
+                <option value="high">高</option>
+                <option value="medium">中</option>
+                <option value="low">低</option>
+              </select>
+            </label>
+            <button type="submit">絞り込み</button>
+          </form>
+
+          <form id="my-list-update-form" class="form-grid compact">
+            <label>ステータス変更
+              <select name="status">
+                <option value="">変更しない</option>
+                <option value="new">未対応</option>
+                <option value="contacted">連絡済み</option>
+                <option value="nurturing">育成中</option>
+                <option value="closed">クローズ</option>
+                <option value="excluded">除外</option>
+              </select>
+            </label>
+            <label>優先度変更
+              <select name="priority">
+                <option value="">変更しない</option>
+                <option value="high">高</option>
+                <option value="medium">中</option>
+                <option value="low">低</option>
+              </select>
+            </label>
+            <label>担当者<input name="owner_name" placeholder="担当者名" /></label>
+            <label>メモ<input name="note" placeholder="商談メモ・備考など" /></label>
+            <button type="submit" class="ghost">選択項目を更新</button>
+            <button type="button" id="my-list-remove-btn" class="ghost danger">選択項目を削除</button>
+          </form>
+
+          <p id="my-list-result" class="muted"></p>
+
+          <div class="table-wrap">
+            <table id="my-list-table">
+              <thead>
+                <tr>
+                  <th><input type="checkbox" id="my-list-select-all" /></th>
+                  <th>企業・団体名</th>
+                  <th>業種</th>
+                  <th>業界</th>
+                  <th>ステータス</th>
+                  <th>優先度</th>
+                  <th>最終連絡日</th>
+                  <th>連絡回数</th>
+                  <th>メール</th>
+                  <th>住所</th>
                 </tr>
               </thead>
               <tbody></tbody>
