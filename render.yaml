@@ -14,8 +14,8 @@ services:
         value: "true"
       - key: CORS_ALLOW_ORIGINS
         value: https://maptolist.online,https://www.maptolist.online,https://macdown360.github.io
-      - key: DB_PATH
-        value: /opt/render/project/src/maptolist.db
+      - key: DATABASE_URL
+        sync: false
       - key: SESSION_SECRET
         generateValue: true
       - key: GOOGLE_CLIENT_ID

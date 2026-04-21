@@ -5,7 +5,6 @@ import json
 import os
 import re
 import secrets
-import sqlite3
 from contextlib import closing
 from datetime import UTC, datetime, timedelta
 from email.mime.text import MIMEText
@@ -29,11 +28,9 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from starlette.middleware.sessions import SessionMiddleware
 
+from app.db import get_connection
+
 BASE_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_DB_PATH = BASE_DIR / "maptolist.db"
-DB_PATH = Path(os.getenv("DB_PATH", str(DEFAULT_DB_PATH))).expanduser()
-LEGACY_DB_PATH = BASE_DIR / "autosales.db"
-INTERMEDIATE_DB_PATH = BASE_DIR / "mapgene.db"
 load_dotenv(BASE_DIR / ".env")
 EMAIL_REGEX = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 POSTAL_CODE_REGEX = re.compile(r"〒?\s*(\d{3})[-ー]?\s*(\d{4})")
@@ -379,18 +376,11 @@ def startup() -> None:
 
 
 def init_db() -> None:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-
-    if not DB_PATH.exists() and INTERMEDIATE_DB_PATH.exists():
-        INTERMEDIATE_DB_PATH.replace(DB_PATH)
-    if not DB_PATH.exists() and LEGACY_DB_PATH.exists():
-        LEGACY_DB_PATH.replace(DB_PATH)
-
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS leads (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 name TEXT NOT NULL,
                 place_id TEXT UNIQUE,
                 website TEXT,
@@ -399,29 +389,26 @@ def init_db() -> None:
                 address TEXT,
                 category TEXT,
                 industry TEXT,
-                rating REAL,
+                rating DOUBLE PRECISION,
                 user_ratings_total INTEGER,
                 editorial_summary TEXT,
                 raw_types TEXT,
+                postal_code TEXT,
+                prefecture TEXT,
+                city TEXT,
+                address_detail TEXT,
+                address_components_json TEXT,
+                user_id INTEGER,
                 browser_client_id TEXT DEFAULT '',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )
             """
         )
-        # Backward compatible migrations for existing DB files.
-        safe_add_column(conn, "leads", "rating REAL")
-        safe_add_column(conn, "leads", "user_ratings_total INTEGER")
-        safe_add_column(conn, "leads", "editorial_summary TEXT")
-        safe_add_column(conn, "leads", "postal_code TEXT")
-        safe_add_column(conn, "leads", "prefecture TEXT")
-        safe_add_column(conn, "leads", "city TEXT")
-        safe_add_column(conn, "leads", "address_detail TEXT")
-        safe_add_column(conn, "leads", "address_components_json TEXT")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS contact_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 lead_id INTEGER NOT NULL,
                 channel TEXT NOT NULL,
                 status TEXT NOT NULL,
@@ -435,7 +422,7 @@ def init_db() -> None:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS suppression_list (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 email TEXT UNIQUE NOT NULL,
                 reason TEXT NOT NULL,
                 created_at TEXT NOT NULL
@@ -445,7 +432,7 @@ def init_db() -> None:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS daily_send_stats (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 day TEXT NOT NULL,
                 channel TEXT NOT NULL,
                 count INTEGER NOT NULL,
@@ -457,7 +444,7 @@ def init_db() -> None:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS audit_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 action TEXT NOT NULL,
                 actor TEXT NOT NULL,
                 target_type TEXT NOT NULL,
@@ -470,7 +457,7 @@ def init_db() -> None:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS manual_tags (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 lead_id INTEGER NOT NULL UNIQUE,
                 category TEXT,
                 industry TEXT,
@@ -483,7 +470,7 @@ def init_db() -> None:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS form_adapters (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 name TEXT NOT NULL,
                 domain TEXT UNIQUE NOT NULL,
                 path TEXT NOT NULL,
@@ -498,7 +485,7 @@ def init_db() -> None:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 google_id TEXT UNIQUE NOT NULL,
                 email TEXT NOT NULL,
                 name TEXT,
@@ -515,7 +502,7 @@ def init_db() -> None:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS my_list_items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL,
                 lead_id INTEGER NOT NULL,
                 status TEXT NOT NULL DEFAULT 'new',
@@ -535,14 +522,14 @@ def init_db() -> None:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS contact_form_discoveries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL,
                 lead_id INTEGER NOT NULL,
                 website TEXT NOT NULL,
                 form_url TEXT NOT NULL,
                 browser_client_id TEXT DEFAULT '',
                 source TEXT NOT NULL DEFAULT 'heuristic_crawl',
-                confidence REAL NOT NULL DEFAULT 0,
+                confidence DOUBLE PRECISION NOT NULL DEFAULT 0,
                 checked_at TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
@@ -552,9 +539,6 @@ def init_db() -> None:
             )
             """
         )
-        safe_add_column(conn, "leads", "user_id INTEGER")
-        safe_add_column(conn, "leads", "browser_client_id TEXT DEFAULT ''")
-        safe_add_column(conn, "contact_form_discoveries", "browser_client_id TEXT DEFAULT ''")
 
 
 def now_iso() -> str:
@@ -704,12 +688,6 @@ def parse_address_components(address_components: list[dict[str, Any]]) -> dict[s
     }
 
 
-def safe_add_column(conn: sqlite3.Connection, table: str, column_def: str) -> None:
-    try:
-        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column_def}")
-    except sqlite3.OperationalError as exc:
-        if "duplicate column name" not in str(exc).lower():
-            raise
 
 
 def normalize_browser_client_id(value: str) -> str:
@@ -770,8 +748,7 @@ def get_current_user(request: Request) -> dict[str, Any] | None:
         if is_auth_disabled():
             return get_or_create_demo_user()
         return None
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with get_connection() as conn:
         row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
     if row:
         return dict(row)
@@ -794,8 +771,7 @@ def is_auth_disabled() -> bool:
 def get_or_create_demo_user() -> dict[str, Any]:
     init_db()
     now = now_iso()
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with get_connection() as conn:
         conn.execute(
             """
             INSERT INTO users (google_id, email, name, picture, maps_api_key, gmail_access_token, gmail_refresh_token, gmail_token_expiry, created_at, updated_at)
@@ -845,8 +821,7 @@ def upsert_user(
     token_expiry: str,
 ) -> dict[str, Any]:
     now = now_iso()
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with get_connection() as conn:
         conn.execute(
             """
             INSERT INTO users (google_id, email, name, picture, gmail_access_token, gmail_refresh_token, gmail_token_expiry, created_at, updated_at)
@@ -883,7 +858,7 @@ async def _refresh_gmail_token(refresh_token: str, user_id: int) -> str:
     new_token = data.get("access_token", "")
     expires_in = int(data.get("expires_in", 3600))
     new_expiry = (datetime.now(UTC) + timedelta(seconds=expires_in)).isoformat()
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         conn.execute(
             "UPDATE users SET gmail_access_token=?, gmail_token_expiry=?, updated_at=? WHERE id=?",
             (new_token, new_expiry, now_iso(), user_id),
@@ -947,14 +922,14 @@ def normalize_email(value: str) -> str:
 def is_suppressed(email: str) -> bool:
     if not email:
         return False
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         row = conn.execute("SELECT 1 FROM suppression_list WHERE email = ?", (normalize_email(email),)).fetchone()
     return row is not None
 
 
 def get_limit_remaining(channel: str) -> int:
     day = datetime.now(UTC).date().isoformat()
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         row = conn.execute("SELECT count FROM daily_send_stats WHERE day = ? AND channel = ?", (day, channel)).fetchone()
     used = row[0] if row else 0
     return max(0, DEFAULT_DAILY_SEND_LIMIT - used)
@@ -962,7 +937,7 @@ def get_limit_remaining(channel: str) -> int:
 
 def increment_daily_stats(channel: str, by_count: int = 1) -> None:
     day = datetime.now(UTC).date().isoformat()
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         conn.execute(
             """
             INSERT INTO daily_send_stats (day, channel, count, updated_at)
@@ -976,7 +951,7 @@ def increment_daily_stats(channel: str, by_count: int = 1) -> None:
 
 
 def log_audit(action: str, target_type: str, target_id: str, details: dict[str, Any], actor: str = "system") -> None:
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         conn.execute(
             """
             INSERT INTO audit_logs (action, actor, target_type, target_id, details, created_at)
@@ -990,7 +965,7 @@ def adopt_orphan_leads(user_id: int) -> None:
     """Backfill legacy rows that were created before user_id existed."""
     if not user_id:
         return
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         if is_auth_disabled() or user_count <= 1:
             conn.execute("UPDATE leads SET user_id = ? WHERE user_id IS NULL", (user_id,))
@@ -1310,7 +1285,7 @@ def set_google_maps_key(payload: GoogleMapsKeyRequest, user: CurrentUser) -> dic
     key = payload.api_key.strip()
     if not key:
         raise HTTPException(status_code=400, detail="APIキーが空です")
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         conn.execute(
             "UPDATE users SET maps_api_key=?, updated_at=? WHERE id=?",
             (key, now_iso(), user["id"]),
@@ -1384,8 +1359,7 @@ def get_leads(
 
     sql += " ORDER BY " + sort_column.format(dir=normalized_dir.upper())
 
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with get_connection() as conn:
         rows = conn.execute(sql, params).fetchall()
         categories = conn.execute(
             """
@@ -1459,7 +1433,7 @@ def get_lead_names(request: Request, user: CurrentUser, limit: int = Query(300, 
     init_db()
     adopt_orphan_leads(int(user["id"]))
     browser_client_id = get_browser_client_id(request)
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         rows = conn.execute(
             """
             SELECT DISTINCT name
@@ -1549,11 +1523,10 @@ async def send_email(request: Request, payload: ContactRequest, user: CurrentUse
     if remaining <= 0:
         raise HTTPException(status_code=429, detail="本日のメール送信上限に達しました")
 
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with get_connection() as conn:
         rows = conn.execute(
-            f"SELECT * FROM leads WHERE id IN ({','.join(['?'] * len(payload.lead_ids))}) AND user_id = ? AND COALESCE(browser_client_id, '') = ?",
-            [*payload.lead_ids, user["id"], browser_client_id],
+            "SELECT * FROM leads WHERE id = ANY(?) AND user_id = ? AND COALESCE(browser_client_id, '') = ?",
+            (payload.lead_ids, user["id"], browser_client_id),
         ).fetchall()
 
     if not rows:
@@ -1653,11 +1626,10 @@ def send_form(request: Request, payload: ContactRequest, user: CurrentUser) -> d
     if remaining <= 0:
         raise HTTPException(status_code=429, detail="本日のフォーム送信上限に達しました")
 
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with get_connection() as conn:
         leads = conn.execute(
-            f"SELECT * FROM leads WHERE id IN ({','.join(['?'] * len(payload.lead_ids))}) AND user_id = ? AND COALESCE(browser_client_id, '') = ?",
-            [*payload.lead_ids, user["id"], browser_client_id],
+            "SELECT * FROM leads WHERE id = ANY(?) AND user_id = ? AND COALESCE(browser_client_id, '') = ?",
+            (payload.lead_ids, user["id"], browser_client_id),
         ).fetchall()
 
     dry_run = os.getenv("FORM_DRY_RUN", "true").lower() == "true"
@@ -1668,8 +1640,7 @@ def send_form(request: Request, payload: ContactRequest, user: CurrentUser) -> d
     skipped = 0
     limited = 0
 
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with get_connection() as conn:
         adapters = conn.execute("SELECT * FROM form_adapters WHERE enabled = 1").fetchall()
     adapter_map = {a["domain"]: dict(a) for a in adapters}
 
@@ -1745,8 +1716,7 @@ def send_form(request: Request, payload: ContactRequest, user: CurrentUser) -> d
 @app.get("/api/form-adapters")
 def list_form_adapters(user: CurrentUser) -> dict[str, Any]:
     init_db()
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with get_connection() as conn:
         rows = conn.execute("SELECT * FROM form_adapters ORDER BY updated_at DESC").fetchall()
     return {"items": [dict(r) for r in rows]}
 
@@ -1755,8 +1725,7 @@ def list_form_adapters(user: CurrentUser) -> dict[str, Any]:
 def list_contact_forms(request: Request, user: CurrentUser) -> dict[str, Any]:
     init_db()
     browser_client_id = get_browser_client_id(request)
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with get_connection() as conn:
         rows = conn.execute(
             """
             SELECT
@@ -1785,11 +1754,10 @@ async def discover_contact_forms(request: Request, payload: LeadSelectionRequest
     if not payload.lead_ids:
         raise HTTPException(status_code=400, detail="対象企業を選択してください")
 
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with get_connection() as conn:
         rows = conn.execute(
-            f"SELECT id, name, website FROM leads WHERE id IN ({','.join(['?'] * len(payload.lead_ids))}) AND user_id = ? AND COALESCE(browser_client_id, '') = ?",
-            [*payload.lead_ids, user["id"], browser_client_id],
+            "SELECT id, name, website FROM leads WHERE id = ANY(?) AND user_id = ? AND COALESCE(browser_client_id, '') = ?",
+            (payload.lead_ids, user["id"], browser_client_id),
         ).fetchall()
 
     leads = [dict(r) for r in rows]
@@ -1824,7 +1792,7 @@ async def discover_contact_forms(request: Request, payload: LeadSelectionRequest
     found_by_lead = {int(item["lead_id"]): item for item in found_items}
     now = now_iso()
 
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         for lead in leads:
             lead_id = int(lead["id"])
             item = found_by_lead.get(lead_id)
@@ -1886,7 +1854,7 @@ def create_form_adapter(payload: FormAdapterRequest, user: CurrentUser) -> dict[
         raise HTTPException(status_code=400, detail="domain が不正です")
 
     now = now_iso()
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         conn.execute(
             """
             INSERT INTO form_adapters (name, domain, path, method, payload_template, enabled, created_at, updated_at)
@@ -1917,8 +1885,7 @@ def create_form_adapter(payload: FormAdapterRequest, user: CurrentUser) -> dict[
 @app.get("/api/suppressions")
 def list_suppressions(user: CurrentUser) -> dict[str, Any]:
     init_db()
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with get_connection() as conn:
         rows = conn.execute("SELECT * FROM suppression_list ORDER BY created_at DESC").fetchall()
     return {"items": [dict(r) for r in rows]}
 
@@ -1930,7 +1897,7 @@ def add_suppression(payload: SuppressionRequest, user: CurrentUser) -> dict[str,
     if not EMAIL_REGEX.fullmatch(email):
         raise HTTPException(status_code=400, detail="有効なメールアドレスを入力してください")
 
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         conn.execute(
             """
             INSERT INTO suppression_list (email, reason, created_at)
@@ -1949,7 +1916,7 @@ def add_suppression(payload: SuppressionRequest, user: CurrentUser) -> dict[str,
 def remove_suppression(email: str, user: CurrentUser) -> dict[str, Any]:
     init_db()
     normalized = normalize_email(email)
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         conn.execute("DELETE FROM suppression_list WHERE email = ?", (normalized,))
     log_audit("remove_suppression", "email", normalized, {})
     return {"ok": True}
@@ -1961,7 +1928,7 @@ def update_manual_tags(payload: BulkTagRequest, user: CurrentUser) -> dict[str, 
     if not payload.lead_ids:
         raise HTTPException(status_code=400, detail="対象企業を選択してください")
 
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         for lead_id in payload.lead_ids:
             conn.execute(
                 """
@@ -1988,8 +1955,7 @@ def update_manual_tags(payload: BulkTagRequest, user: CurrentUser) -> dict[str, 
 @app.get("/api/audit-logs")
 def get_audit_logs(user: CurrentUser, limit: int = Query(50, ge=1, le=500)) -> dict[str, Any]:
     init_db()
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with get_connection() as conn:
         rows = conn.execute("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
     return {"items": [dict(r) for r in rows]}
 
@@ -2222,7 +2188,7 @@ def upsert_lead(item: dict[str, Any], user_id: int | None = None, browser_client
     now = now_iso()
     scoped_place_id = scope_place_id(item.get("place_id", ""), browser_client_id or item.get("browser_client_id", ""))
     normalized_client_id = normalize_browser_client_id(browser_client_id or item.get("browser_client_id", ""))
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         existing = conn.execute(
             "SELECT id FROM leads WHERE place_id = ?",
             (scoped_place_id,),
@@ -2279,7 +2245,7 @@ def upsert_lead(item: dict[str, Any], user_id: int | None = None, browser_client
 
 def save_contact_log(lead_id: int, channel: str, status: str, subject: str, message: str) -> None:
     created_at = now_iso()
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         conn.execute(
             """
             INSERT INTO contact_logs (lead_id, channel, status, subject, message, created_at)
@@ -2380,8 +2346,7 @@ def get_my_list(
             raise HTTPException(status_code=400, detail="未対応の sort_by です")
         sql += f" ORDER BY {sort_column} {normalized_dir}, m.updated_at DESC"
 
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with get_connection() as conn:
         rows = conn.execute(sql, params).fetchall()
 
         statuses = conn.execute(
@@ -2432,11 +2397,10 @@ def add_to_my_list(request: Request, payload: MyListBulkAddRequest, user: Curren
     added = 0
     updated = 0
 
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with get_connection() as conn:
         existing_rows = conn.execute(
-            f"SELECT id FROM leads WHERE id IN ({','.join(['?'] * len(payload.lead_ids))}) AND user_id = ? AND COALESCE(browser_client_id, '') = ?",
-            [*payload.lead_ids, user["id"], browser_client_id],
+            "SELECT id FROM leads WHERE id = ANY(?) AND user_id = ? AND COALESCE(browser_client_id, '') = ?",
+            (payload.lead_ids, user["id"], browser_client_id),
         ).fetchall()
         valid_lead_ids = [int(r["id"]) for r in existing_rows]
 
@@ -2511,7 +2475,7 @@ def update_my_list_item(item_id: int, payload: MyListUpdateRequest, user: Curren
     params.append(now_iso())
     params.extend([item_id, user["id"]])
 
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         cur = conn.execute(
             f"UPDATE my_list_items SET {', '.join(updates)} WHERE id = ? AND user_id = ?",
             params,
@@ -2537,7 +2501,7 @@ def update_my_list_item(item_id: int, payload: MyListUpdateRequest, user: Curren
 @app.delete("/api/my-list/{item_id}")
 def remove_my_list_item(item_id: int, user: CurrentUser) -> dict[str, Any]:
     init_db()
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         cur = conn.execute("DELETE FROM my_list_items WHERE id = ? AND user_id = ?", (item_id, user["id"]))
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail="マイリスト項目が見つかりません")
@@ -2602,8 +2566,7 @@ def get_contact_logs(
     sql += " ORDER BY c.created_at DESC LIMIT ?"
     params.append(limit)
 
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with get_connection() as conn:
         rows = conn.execute(sql, params).fetchall()
 
     return {"items": [dict(r) for r in rows]}
@@ -2613,8 +2576,7 @@ def get_contact_logs(
 def get_lead_timeline(lead_id: int, request: Request, user: CurrentUser, limit: int = Query(200, ge=1, le=1000)) -> dict[str, Any]:
     init_db()
     browser_client_id = get_browser_client_id(request)
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with get_connection() as conn:
         lead = conn.execute("SELECT * FROM leads WHERE id = ? AND user_id = ? AND COALESCE(browser_client_id, '') = ?", (lead_id, user["id"], browser_client_id)).fetchone()
         if not lead:
             raise HTTPException(status_code=404, detail="企業が見つかりません")
