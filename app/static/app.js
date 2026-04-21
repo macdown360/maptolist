@@ -751,7 +751,9 @@ function renderContactFormsTable(items) {
 }
 
 function getSelectedLeadIds() {
-  return Array.from(document.querySelectorAll('.lead-check:checked')).map((el) => Number(el.value));
+  return Array.from(document.querySelectorAll('.lead-check:checked'))
+    .map((el) => Number(el.value))
+    .filter((n) => Number.isInteger(n) && n > 0);
 }
 
 function getSelectedLeadItems() {
@@ -1036,7 +1038,11 @@ async function addSelectedToMyList() {
   const data = await res.json();
 
   if (!res.ok) {
-    myListAddResult.textContent = `エラー: ${data.detail || '追加失敗'}`;
+    const detail = data.detail;
+    const errMsg = Array.isArray(detail)
+      ? detail.map((e) => (e && e.msg ? `${e.loc ? e.loc.join('.') + ': ' : ''}${e.msg}` : JSON.stringify(e))).join(' / ')
+      : (detail || '追加失敗');
+    myListAddResult.textContent = `エラー: ${errMsg}`;
     return;
   }
 
