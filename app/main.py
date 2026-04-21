@@ -280,8 +280,12 @@ TYPE_PRIORITY: list[str] = [
 # /api/import/google-places への連続呼び出しを制限する
 # 環境変数 RATE_LIMIT_PLACES で上書き可能（例: "10/minute"）
 DEFAULT_RATE_LIMIT_PLACES = os.getenv("RATE_LIMIT_PLACES", "5/minute")
-DEFAULT_RATE_LIMIT_DAILY_PLACES = os.getenv("RATE_LIMIT_DAILY_PLACES", "200/day")
 limiter = Limiter(key_func=get_remote_address)
+
+# ---------- データ取得件数上限 ----------
+FETCH_LIMIT_PER_REQUEST: int = int(os.getenv("FETCH_LIMIT_PER_REQUEST", "50"))
+FETCH_LIMIT_DAILY: int = int(os.getenv("FETCH_LIMIT_DAILY", "200"))
+FETCH_LIMIT_MONTHLY: int = int(os.getenv("FETCH_LIMIT_MONTHLY", "1000"))
 
 app = FastAPI(title="Map to List Lead Collector", version="0.3.0")
 app.state.limiter = limiter
@@ -317,7 +321,7 @@ class ImportRequest(BaseModel):
     region: str = Field("", description="任意。地域キーワード")
     place_type: str = Field("", description="任意。Google Placesの業種タイプ")
     language: str = Field("ja", description="Google Places API language")
-    max_results: int = Field(20, ge=1, le=100, description="取得件数上限")
+    max_results: int = Field(20, ge=1, le=50, description="取得件数上限")
     api_key: str = Field("", description="任意。ブラウザ保存キーをリクエストで渡す")
 
 
@@ -540,6 +544,18 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS fetch_usage (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                day TEXT NOT NULL,
+                count INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                UNIQUE(user_id, day)
+            )
+            """
+        )
         try:
             conn.execute("ALTER TABLE contact_form_discoveries ADD COLUMN email TEXT NOT NULL DEFAULT ''")
         except Exception:
@@ -549,6 +565,47 @@ def init_db() -> None:
 
 def now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def get_daily_fetch_usage(user_id: int) -> int:
+    """今日のユーザーのデータ取得件数を返す。"""
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT count FROM fetch_usage WHERE user_id = ? AND day = ?",
+            (user_id, today),
+        ).fetchone()
+    return row[0] if row else 0
+
+
+def get_monthly_fetch_usage(user_id: int) -> int:
+    """今月のユーザーのデータ取得件数合計を返す。"""
+    month_prefix = datetime.now(UTC).strftime("%Y-%m")
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(count), 0) FROM fetch_usage WHERE user_id = ? AND day LIKE ?",
+            (user_id, f"{month_prefix}-%"),
+        ).fetchone()
+    return row[0] if row else 0
+
+
+def record_fetch_usage(user_id: int, count: int) -> None:
+    """今日の取得件数を加算して記録する。"""
+    if count <= 0:
+        return
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    ts = now_iso()
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO fetch_usage (user_id, day, count, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id, day) DO UPDATE SET
+                count = count + excluded.count,
+                updated_at = excluded.updated_at
+            """,
+            (user_id, today, count, ts),
+        )
 
 
 def clean_address_text(raw_value: str) -> str:
@@ -1476,7 +1533,6 @@ def get_lead_names(request: Request, user: CurrentUser, limit: int = Query(300, 
 
 @app.post("/api/import/google-places")
 @limiter.limit(lambda: DEFAULT_RATE_LIMIT_PLACES)
-@limiter.limit(lambda: DEFAULT_RATE_LIMIT_DAILY_PLACES)
 async def import_google_places(request: Request, payload: ImportRequest, user: CurrentUser) -> dict[str, Any]:
     init_db()
     adopt_orphan_leads(int(user["id"]))
@@ -1484,6 +1540,25 @@ async def import_google_places(request: Request, payload: ImportRequest, user: C
     api_key = get_google_api_key()
     if not api_key:
         raise HTTPException(status_code=400, detail="Google Places APIキーがサーバーに設定されていません。")
+
+    # ---- 取得件数上限チェック ----
+    user_id = int(user["id"])
+    daily_used = get_daily_fetch_usage(user_id)
+    monthly_used = get_monthly_fetch_usage(user_id)
+    daily_remaining = max(0, FETCH_LIMIT_DAILY - daily_used)
+    monthly_remaining = max(0, FETCH_LIMIT_MONTHLY - monthly_used)
+    if daily_remaining == 0:
+        raise HTTPException(
+            status_code=429,
+            detail=f"本日の取得件数上限（{FETCH_LIMIT_DAILY}件）に達しました。明日以降にお試しください。"
+        )
+    if monthly_remaining == 0:
+        raise HTTPException(
+            status_code=429,
+            detail=f"今月の取得件数上限（{FETCH_LIMIT_MONTHLY}件）に達しました。来月以降にお試しください。"
+        )
+    # リクエスト件数を残枠に収める
+    effective_max = min(payload.max_results, daily_remaining, monthly_remaining)
 
     query = payload.query.strip()
     if payload.region.strip():
@@ -1496,10 +1571,14 @@ async def import_google_places(request: Request, payload: ImportRequest, user: C
     items = await fetch_places(
         query=query,
         language=payload.language,
-        max_results=payload.max_results,
+        max_results=effective_max,
         api_key=api_key,
         place_type=place_type,
     )
+
+    # 実際に取得した件数を記録
+    record_fetch_usage(user_id, len(items))
+
     saved = 0
     added = 0
     updated = 0
