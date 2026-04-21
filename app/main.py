@@ -527,6 +527,7 @@ def init_db() -> None:
                 lead_id INTEGER NOT NULL,
                 website TEXT NOT NULL,
                 form_url TEXT NOT NULL,
+                email TEXT NOT NULL DEFAULT '',
                 browser_client_id TEXT DEFAULT '',
                 source TEXT NOT NULL DEFAULT 'heuristic_crawl',
                 confidence DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -539,6 +540,11 @@ def init_db() -> None:
             )
             """
         )
+        try:
+            conn.execute("ALTER TABLE contact_form_discoveries ADD COLUMN email TEXT NOT NULL DEFAULT ''")
+        except Exception:
+            # 既存環境ではカラム追加済みの場合がある
+            pass
 
 
 def now_iso() -> str:
@@ -1157,14 +1163,15 @@ async def fetch_html_page(client: httpx.AsyncClient, url: str) -> tuple[str, str
 async def discover_contact_form_info(client: httpx.AsyncClient, website: str) -> dict[str, Any]:
     base_url = normalize_website_url(website)
     if not base_url:
-        return {"form_url": "", "source": "heuristic_crawl", "confidence": 0.0, "title": ""}
+        return {"form_url": "", "email": "", "source": "heuristic_crawl", "confidence": 0.0, "title": ""}
 
     home_html, resolved_base = await fetch_html_page(client, base_url)
     if not home_html:
-        return {"form_url": "", "source": "heuristic_crawl", "confidence": 0.0, "title": ""}
+        return {"form_url": "", "email": "", "source": "heuristic_crawl", "confidence": 0.0, "title": ""}
 
     candidates = extract_candidate_contact_urls(resolved_base, home_html)
     best: dict[str, Any] = {"url": "", "score": 0, "title": ""}
+    discovered_email = ""
     visited: set[str] = set()
 
     for candidate in candidates:
@@ -1174,16 +1181,36 @@ async def discover_contact_form_info(client: httpx.AsyncClient, website: str) ->
         html, final_url = await fetch_html_page(client, candidate)
         if not html:
             continue
+
+        if not discovered_email:
+            matches = EMAIL_REGEX.findall(html)
+            for matched in matches:
+                email = str(matched or "").strip()
+                if not email:
+                    continue
+                lowered = email.lower()
+                if lowered.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
+                    continue
+                discovered_email = email
+                break
+
         analysis = analyze_contact_page(final_url, html)
         if analysis["score"] > best["score"]:
             best = analysis
 
     if not best.get("has_contact_form"):
-        return {"form_url": "", "source": "heuristic_crawl", "confidence": 0.0, "title": ""}
+        return {
+            "form_url": "",
+            "email": discovered_email,
+            "source": "heuristic_crawl",
+            "confidence": 0.0,
+            "title": "",
+        }
 
     confidence = min(0.99, max(0.5, float(best["score"]) / 20.0))
     return {
         "form_url": str(best.get("url", "")),
+        "email": discovered_email,
         "source": "heuristic_crawl",
         "confidence": confidence,
         "title": str(best.get("title", "")),
@@ -1734,12 +1761,13 @@ def list_contact_forms(request: Request, user: CurrentUser) -> dict[str, Any]:
                 l.name AS lead_name,
                 d.website,
                 d.form_url,
+                d.email,
                 d.source,
                 d.confidence,
                 d.checked_at
             FROM contact_form_discoveries d
             JOIN leads l ON l.id = d.lead_id
-            WHERE d.user_id = ? AND COALESCE(d.browser_client_id, '') = ? AND d.form_url <> ''
+            WHERE d.user_id = ? AND COALESCE(d.browser_client_id, '') = ? AND (d.form_url <> '' OR d.email <> '')
             ORDER BY d.checked_at DESC, l.name ASC
             """,
             (user["id"], browser_client_id),
@@ -1773,13 +1801,15 @@ async def discover_contact_forms(request: Request, payload: LeadSelectionRequest
         async with semaphore:
             info = await discover_contact_form_info(client, website)
         form_url = str(info.get("form_url", "")).strip()
-        if not form_url:
+        email = str(info.get("email", "")).strip()
+        if not form_url and not email:
             return None
         return {
             "lead_id": int(lead["id"]),
             "lead_name": str(lead.get("name", "")),
             "website": website,
             "form_url": form_url,
+            "email": email,
             "source": str(info.get("source", "heuristic_crawl")),
             "confidence": float(info.get("confidence", 0.0)),
             "checked_at": now_iso(),
@@ -1805,11 +1835,12 @@ async def discover_contact_forms(request: Request, payload: LeadSelectionRequest
 
             conn.execute(
                 """
-                INSERT INTO contact_form_discoveries (user_id, lead_id, website, form_url, browser_client_id, source, confidence, checked_at, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO contact_form_discoveries (user_id, lead_id, website, form_url, email, browser_client_id, source, confidence, checked_at, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(user_id, lead_id) DO UPDATE SET
                     website=excluded.website,
                     form_url=excluded.form_url,
+                    email=excluded.email,
                     browser_client_id=excluded.browser_client_id,
                     source=excluded.source,
                     confidence=excluded.confidence,
@@ -1821,6 +1852,7 @@ async def discover_contact_forms(request: Request, payload: LeadSelectionRequest
                     item["lead_id"],
                     item["website"],
                     item["form_url"],
+                    item["email"],
                     browser_client_id,
                     item["source"],
                     item["confidence"],
