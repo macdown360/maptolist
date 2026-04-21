@@ -712,6 +712,39 @@ function formatUrlLabel(value) {
   }
 }
 
+function isValidEmailValue(value) {
+  const text = String(value || '').trim();
+  if (!text) return false;
+  return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(text);
+}
+
+function looksLikeIsoDateValue(value) {
+  const text = String(value || '').trim();
+  if (!text) return false;
+  return /^\d{4}-\d{2}-\d{2}(?:[T\s].*)?$/.test(text);
+}
+
+function normalizeContactDiscoveryItem(item) {
+  const src = item || {};
+  const emailRaw = String(src.email || '').trim();
+  const checkedAtRaw = String(src.checked_at || '').trim();
+
+  if (isValidEmailValue(emailRaw)) {
+    return {
+      ...src,
+      email: emailRaw,
+      checked_at: checkedAtRaw,
+    };
+  }
+
+  const fallbackCheckedAt = !checkedAtRaw && looksLikeIsoDateValue(emailRaw) ? emailRaw : checkedAtRaw;
+  return {
+    ...src,
+    email: '',
+    checked_at: fallbackCheckedAt,
+  };
+}
+
 function hydrateContactFormsState() {
   const items = getStoredContactFormItems();
   if (!items.length) return;
@@ -732,7 +765,9 @@ function renderContactFormsTable(items) {
     return;
   }
 
-  contactFormsTbody.innerHTML = items
+  const normalizedItems = items.map(normalizeContactDiscoveryItem);
+
+  contactFormsTbody.innerHTML = normalizedItems
     .map(
       (item) => `
         <tr>
@@ -1182,7 +1217,7 @@ async function fetchContactForms() {
   }
 
   const serverItems = Array.isArray(data.items) ? data.items : [];
-  const items = mergeContactFormItems([], serverItems);
+  const items = mergeContactFormItems([], serverItems).map(normalizeContactDiscoveryItem);
   renderContactFormsTable(items);
   persistContactFormsState(items);
   if (contactFormsResult) contactFormsResult.textContent = `${items.length}件の問い合わせフォーム・メールアドレス情報を表示中`;
@@ -1214,7 +1249,7 @@ async function discoverSelectedContactForms() {
   }
 
   const foundItems = Array.isArray(data.items) ? data.items : [];
-  const mergedItems = mergeContactFormItems(getStoredContactFormItems(), foundItems);
+  const mergedItems = mergeContactFormItems(getStoredContactFormItems(), foundItems).map(normalizeContactDiscoveryItem);
   persistContactFormsState(mergedItems);
 
   const msg = `探索完了: ${data.found}件 / 対象${data.checked}件`;
