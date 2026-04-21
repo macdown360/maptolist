@@ -67,6 +67,9 @@ let myListItems = [];
 let placeTypeItems = [];
 let leadSortBy = 'updated_at';
 let leadSortDir = 'desc';
+let leadFetchController = null;
+let leadFetchRequestSeq = 0;
+let leadFilterAutoSearchTimerId = null;
 const MAPS_KEY_STORAGE_KEY = 'maptolist.google_maps_api_key.v2';
 const LEADS_CACHE_STORAGE_KEY = 'maptolist.leads_cache.v2';
 const LEADS_FILTER_STORAGE_KEY = 'maptolist.leads_filter.v2';
@@ -965,6 +968,13 @@ function getSelectedMyListLeadIds() {
 async function fetchLeads() {
   if (!filterForm) return;
 
+  if (leadFetchController) {
+    leadFetchController.abort();
+  }
+  const controller = new AbortController();
+  leadFetchController = controller;
+  const requestSeq = ++leadFetchRequestSeq;
+
   const normalizedFilters = getNormalizedLeadFilters();
   const params = new URLSearchParams();
   if (normalizedFilters.q) params.set('q', normalizedFilters.q);
@@ -976,10 +986,15 @@ async function fetchLeads() {
   let res;
   let data;
   try {
-    res = await apiFetch(`/api/leads?${params.toString()}`);
+    res = await apiFetch(`/api/leads?${params.toString()}`, { signal: controller.signal });
     if (!res) return;
     data = await res.json();
   } catch (err) {
+    const errName = err instanceof Error ? err.name : '';
+    if (errName === 'AbortError') {
+      return;
+    }
+
     const fallback = getStoredJson(LEADS_CACHE_STORAGE_KEY, {});
     const cachedItems = Array.isArray(fallback.items) ? fallback.items : [];
     if (cachedItems.length) {
@@ -991,10 +1006,18 @@ async function fetchLeads() {
       return;
     }
     throw err;
+  } finally {
+    if (leadFetchController === controller) {
+      leadFetchController = null;
+    }
   }
 
   if (!res.ok) {
     addActivity(`一覧取得エラー: ${data.detail || 'unknown'}`, 'system');
+    return;
+  }
+
+  if (requestSeq !== leadFetchRequestSeq) {
     return;
   }
 
@@ -1019,6 +1042,18 @@ async function fetchLeads() {
   if (limitResult) {
     limitResult.textContent = `本日上限 ${data.send_limit.daily_limit}件 / email残 ${data.send_limit.email_remaining} / form残 ${data.send_limit.form_remaining}`;
   }
+
+}
+
+function scheduleLeadFilterAutoSearch(sourceLabel) {
+  if (leadFilterAutoSearchTimerId) {
+    window.clearTimeout(leadFilterAutoSearchTimerId);
+  }
+
+  leadFilterAutoSearchTimerId = window.setTimeout(async () => {
+    await fetchLeads();
+    addActivity(`${sourceLabel}で再検索: ${currentItems.length}件`, 'system');
+  }, 120);
 }
 
 async function fetchMyList() {
@@ -1437,20 +1472,18 @@ filterForm?.addEventListener('submit', async (e) => {
 });
 
 categorySelect?.addEventListener('change', async () => {
-  await fetchLeads();
-  addActivity(`業種で再検索: ${currentItems.length}件`, 'system');
+  scheduleLeadFilterAutoSearch('業種');
 });
 
 industrySelect?.addEventListener('change', async () => {
-  await fetchLeads();
-  addActivity(`業界で再検索: ${currentItems.length}件`, 'system');
+  scheduleLeadFilterAutoSearch('業界');
 });
 
 if (filterForm) {
   // ソートは列ヘッダクリックでのみ操作する。
 }
 
-leadsThead?.addEventListener('click', async (e) => {
+leadsThead?.addEventListener('click', (e) => {
   const target = e.target;
   if (!(target instanceof Element)) return;
 
@@ -1467,7 +1500,11 @@ leadsThead?.addEventListener('click', async (e) => {
     leadSortDir = 'asc';
   }
 
-  await fetchLeads();
+  currentItems = sortLeadItemsClientSide(currentItems, leadSortBy, leadSortDir);
+  renderLeadsTable(currentItems);
+  updateLeadSortIndicators();
+  persistLeadListState(currentItems);
+  addActivity(`並び替え: ${leadSortBy} ${leadSortDir}`, 'system');
 });
 
 myListFilterForm?.addEventListener('submit', async (e) => {
