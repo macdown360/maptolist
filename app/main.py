@@ -2175,7 +2175,6 @@ async def fetch_places(
                 if place_type and place_type not in detail_types:
                     continue
 
-                email = await extract_email_from_website(client, website)
                 category, industry = classify_business(detail_types, place.get("name", ""), website)
                 address = clean_address_text(detail_data.get("formatted_address") or place.get("formatted_address", ""))
                 address_parts = parse_address_components(address_components)
@@ -2189,7 +2188,6 @@ async def fetch_places(
                         "place_id": place_id,
                         "website": website,
                         "phone": phone,
-                        "email": email,
                         "address": address,
                         "rating": rating,
                         "user_ratings_total": user_ratings_total,
@@ -2211,24 +2209,6 @@ async def fetch_places(
                 break
 
     return places[:max_results]
-
-
-async def extract_email_from_website(client: httpx.AsyncClient, website: str) -> str:
-    if not website:
-        return ""
-    try:
-        response = await client.get(website, follow_redirects=True)
-        if response.status_code >= 400:
-            return ""
-        text = response.text
-        matches = EMAIL_REGEX.findall(text)
-        for email in matches:
-            if email.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
-                continue
-            return email
-    except Exception:  # noqa: BLE001
-        return ""
-    return ""
 
 
 def classify_business(types: list[str], name: str, website: str = "") -> tuple[str, str]:

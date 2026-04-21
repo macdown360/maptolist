@@ -424,7 +424,6 @@ function renderLeadsTable(items) {
         <td>${item.user_ratings_total ?? ''}</td>
         <td>${item.website ? `<a href="${escapeHtml(item.website)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.website)}</a>` : ''}</td>
         <td>${escapeHtml(item.phone)}</td>
-        <td>${escapeHtml(item.email)}${item.suppressed ? ' (停止中)' : ''}</td>
       </tr>
     `,
     )
@@ -499,7 +498,6 @@ function renderMyListTable(items) {
         <td><span class="priority-badge priority-${escapeHtml(item.priority)}">${escapeHtml(toPriorityLabel(item.priority))}</span></td>
         <td>${escapeHtml(item.last_contacted_at || '')}</td>
         <td>${Number(item.contact_count || 0)}</td>
-        <td>${escapeHtml(item.email)}</td>
         <td>${escapeHtml(item.address)}</td>
       </tr>
     `,
