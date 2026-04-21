@@ -5,26 +5,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Map to List — ログイン</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Source+Code+Pro:wght@500;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Noto Sans JP', sans-serif;
-      background: #f5f7fb;
+      font-family: "sohne-var", "Noto Sans JP", sans-serif;
+      font-feature-settings: "ss01" 1;
+      background:
+        radial-gradient(circle at 10% -5%, rgba(249, 107, 238, 0.16), transparent 28%),
+        radial-gradient(circle at 88% 0%, rgba(83, 58, 253, 0.15), transparent 32%),
+        linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
       display: flex;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
+      color: #061b31;
     }
     .login-card {
       background: #ffffff;
-      border: 1px solid #dde5f3;
-      border-radius: 20px;
+      border: 1px solid #e5edf5;
+      border-radius: 8px;
       padding: 52px 44px 44px;
       width: 100%;
       max-width: 420px;
       text-align: center;
-      box-shadow: 0 8px 32px rgba(100, 140, 220, 0.12);
+      box-shadow: rgba(50, 50, 93, 0.25) 0 30px 45px -30px, rgba(0, 0, 0, 0.1) 0 18px 36px -18px;
     }
     .brand-icon {
       font-size: 40px;
@@ -32,13 +37,14 @@
     }
     .brand-title {
       font-size: 26px;
-      font-weight: 700;
-      color: #1a2a4a;
+      font-weight: 300;
+      letter-spacing: -0.26px;
+      color: #061b31;
       margin-bottom: 4px;
     }
     .brand-sub {
       font-size: 14px;
-      color: #6a7ea8;
+      color: #64748d;
       margin-bottom: 36px;
     }
     .feature-list {
@@ -51,9 +57,9 @@
       align-items: center;
       gap: 10px;
       font-size: 14px;
-      color: #3a4a6a;
+      color: #273951;
       padding: 6px 0;
-      border-bottom: 1px solid #eef2fb;
+      border-bottom: 1px solid #e5edf5;
     }
     .feature-list li:last-child { border-bottom: 0; }
     .feature-icon { font-size: 18px; flex-shrink: 0; }
@@ -65,22 +71,22 @@
       width: 100%;
       padding: 14px 20px;
       background: #ffffff;
-      border: 2px solid #dde5f3;
-      border-radius: 12px;
+      border: 1px solid #b9b9f9;
+      border-radius: 4px;
       font-family: inherit;
       font-size: 15px;
-      font-weight: 600;
-      color: #2c3e6a;
+      font-weight: 400;
+      color: #533afd;
       cursor: pointer;
       text-decoration: none;
       transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      box-shadow: rgba(50, 50, 93, 0.25) 0 14px 21px -14px, rgba(0, 0, 0, 0.1) 0 8px 17px -8px;
     }
     .google-btn:hover {
-      background: #f0f5ff;
-      border-color: #7ea9e1;
-      box-shadow: 0 4px 14px rgba(100, 150, 220, 0.25);
-      transform: translateY(-1px);
+      background: rgba(83, 58, 253, 0.05);
+      border-color: #533afd;
+      box-shadow: rgba(50, 50, 93, 0.25) 0 18px 28px -16px, rgba(0, 0, 0, 0.1) 0 12px 24px -12px;
+      transform: translateY(0);
     }
     .google-btn:active { transform: translateY(0); }
     .google-logo {
@@ -90,16 +96,16 @@
     .footer-note {
       margin-top: 24px;
       font-size: 12px;
-      color: #9aa8c0;
+      color: #64748d;
       line-height: 1.6;
     }
     .alert {
       margin-bottom: 14px;
       padding: 10px 12px;
-      border-radius: 10px;
-      border: 1px solid #f1c9c9;
-      background: #fff2f2;
-      color: #9b2e2e;
+      border-radius: 4px;
+      border: 1px solid #ffd7ef;
+      background: #fff2f7;
+      color: #ea2261;
       font-size: 13px;
       text-align: left;
     }
@@ -107,17 +113,28 @@
       margin-top: 12px;
       text-align: left;
       font-size: 12px;
-      color: #6a7ea8;
+      color: #64748d;
       line-height: 1.6;
-      border: 1px dashed #cfdbef;
-      border-radius: 10px;
+      border: 1px dashed #362baa;
+      border-radius: 6px;
       padding: 10px 12px;
-      background: #f8fbff;
+      background: #f9fbff;
     }
     .google-btn.disabled {
       opacity: 0.55;
       pointer-events: none;
       cursor: not-allowed;
+    }
+
+    @media (max-width: 640px) {
+      .login-card {
+        margin: 16px;
+        padding: 36px 22px 26px;
+      }
+
+      .brand-title {
+        font-size: 22px;
+      }
     }
   </style>
 </head>
