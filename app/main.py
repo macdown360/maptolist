@@ -1406,9 +1406,10 @@ def get_leads(
     """
     params: list[Any] = [user["id"], browser_client_id]
 
-    if q:
+    normalized_q = q.strip()
+    if normalized_q:
         sql += " AND (l.name LIKE ? OR l.address LIKE ? OR l.website LIKE ?)"
-        like_q = f"%{q}%"
+        like_q = f"%{normalized_q}%"
         params.extend([like_q, like_q, like_q])
     normalized_category = category.strip()
     normalized_industry = industry.strip()

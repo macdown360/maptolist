@@ -294,6 +294,23 @@ function renderOptions(select, items, selected, labelFormatter = (v) => v) {
   select.value = selectedValue;
 }
 
+function getNormalizedLeadFilters() {
+  if (!filterForm) {
+    return {
+      q: '',
+      category: '',
+      industry: '',
+    };
+  }
+
+  const formData = new FormData(filterForm);
+  return {
+    q: String(formData.get('q') || '').trim(),
+    category: String(formData.get('category') || '').trim(),
+    industry: String(formData.get('industry') || '').trim(),
+  };
+}
+
 function mergeLeadItems(existingItems = [], incomingItems = []) {
   const merged = new Map();
   for (const item of existingItems || []) {
@@ -332,11 +349,11 @@ function persistLeadListState(items = currentItems) {
   });
 
   if (!filterForm) return;
-  const formData = new FormData(filterForm);
+  const normalizedFilters = getNormalizedLeadFilters();
   setStoredJson(LEADS_FILTER_STORAGE_KEY, {
-    q: String(formData.get('q') || ''),
-    category: String(formData.get('category') || ''),
-    industry: String(formData.get('industry') || ''),
+    q: normalizedFilters.q,
+    category: normalizedFilters.category,
+    industry: normalizedFilters.industry,
     sortBy: leadSortBy,
     sortDir: leadSortDir,
   });
@@ -948,7 +965,11 @@ function getSelectedMyListLeadIds() {
 async function fetchLeads() {
   if (!filterForm) return;
 
-  const params = new URLSearchParams(new FormData(filterForm));
+  const normalizedFilters = getNormalizedLeadFilters();
+  const params = new URLSearchParams();
+  if (normalizedFilters.q) params.set('q', normalizedFilters.q);
+  if (normalizedFilters.category) params.set('category', normalizedFilters.category);
+  if (normalizedFilters.industry) params.set('industry', normalizedFilters.industry);
   params.set('sort_by', leadSortBy);
   params.set('sort_dir', leadSortDir);
 
@@ -1413,6 +1434,16 @@ filterForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
   await fetchLeads();
   addActivity(`一覧を更新: ${currentItems.length}件`, 'system');
+});
+
+categorySelect?.addEventListener('change', async () => {
+  await fetchLeads();
+  addActivity(`業種で再検索: ${currentItems.length}件`, 'system');
+});
+
+industrySelect?.addEventListener('change', async () => {
+  await fetchLeads();
+  addActivity(`業界で再検索: ${currentItems.length}件`, 'system');
 });
 
 if (filterForm) {
