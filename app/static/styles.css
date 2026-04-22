@@ -536,24 +536,29 @@ td {
 
 #contact-forms-table th:nth-child(1),
 #contact-forms-table td:nth-child(1) {
-  width: 22%;
+  width: 30%;
 }
 
 #contact-forms-table th:nth-child(2),
 #contact-forms-table td:nth-child(2) {
-  width: 24%;
+  width: 20%;
 }
 
 #contact-forms-table th:nth-child(3),
 #contact-forms-table td:nth-child(3) {
-  width: 40%;
+  width: 20%;
 }
 
 #contact-forms-table th:nth-child(4),
 #contact-forms-table td:nth-child(4) {
-  width: 14%;
+  width: 20%;
   white-space: nowrap;
   text-align: center;
+}
+
+#contact-forms-table th:nth-child(5),
+#contact-forms-table td:nth-child(5) {
+  width: 10%;
 }
 
 .table-link {
