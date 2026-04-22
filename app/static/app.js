@@ -73,6 +73,7 @@ let leadPreviewSourceItems = [];
 let leadFetchController = null;
 let leadFetchRequestSeq = 0;
 let leadFilterAutoSearchTimerId = null;
+const LEAD_FILTER_AUTO_SEARCH_DEBOUNCE_MS = 60;
 const MAPS_KEY_STORAGE_KEY = 'maptolist.google_maps_api_key.v2';
 const LEADS_CACHE_STORAGE_KEY = 'maptolist.leads_cache.v2';
 const LEADS_FILTER_STORAGE_KEY = 'maptolist.leads_filter.v2';
@@ -1119,7 +1120,6 @@ async function fetchLeads() {
   const selectedCategory = String(filterForm.querySelector('select[name="category"]')?.value || '');
   const selectedIndustry = String(filterForm.querySelector('select[name="industry"]')?.value || '');
 
-  console.log('[DEBUG] filters from API:', JSON.stringify(data.filters));
   renderLeadsTable(currentItems);
   renderOptions(prefectureSelect, data.filters.prefectures || [], selectedPrefecture);
   renderOptions(citySelect, data.filters.cities || [], selectedCity);
@@ -1148,7 +1148,7 @@ function scheduleLeadFilterAutoSearch(sourceLabel) {
   leadFilterAutoSearchTimerId = window.setTimeout(async () => {
     await fetchLeads();
     addActivity(`${sourceLabel}で再検索: ${currentItems.length}件`, 'system');
-  }, 120);
+  }, LEAD_FILTER_AUTO_SEARCH_DEBOUNCE_MS);
 }
 
 async function fetchMyList() {

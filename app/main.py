@@ -1484,8 +1484,31 @@ def get_leads(
             ORDER BY i
             """
         , (user["id"], browser_client_id)).fetchall()
+        prefecture_rows = conn.execute(
+            """
+            SELECT DISTINCT TRIM(COALESCE(l.prefecture, '')) AS prefecture
+            FROM leads l
+            WHERE l.user_id = ? AND COALESCE(l.browser_client_id, '') = ? AND TRIM(COALESCE(l.prefecture, '')) <> ''
+            ORDER BY prefecture
+            """
+        , (user["id"], browser_client_id)).fetchall()
 
-    # option_rows: 別接続で取得（address_components_json カラムが存在しない場合も考慮）
+        city_where = ""
+        city_params: list[Any] = [user["id"], browser_client_id]
+        if normalized_prefecture:
+            city_where = " AND TRIM(COALESCE(l.prefecture, '')) = ?"
+            city_params.append(normalized_prefecture)
+
+        city_rows = conn.execute(
+            f"""
+            SELECT DISTINCT TRIM(COALESCE(l.city, '')) AS city
+            FROM leads l
+            WHERE l.user_id = ? AND COALESCE(l.browser_client_id, '') = ? AND TRIM(COALESCE(l.city, '')) <> ''{city_where}
+            ORDER BY city
+            """
+        , tuple(city_params)).fetchall()
+
+    # option_rows: 都道府県/市区町村が欠落している行だけフォールバック解析する
     option_rows: list[Any] = []
     try:
         with get_connection() as conn2:
@@ -1497,7 +1520,12 @@ def get_leads(
                     l.city,
                     l.address_components_json
                 FROM leads l
-                WHERE l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
+                WHERE l.user_id = ?
+                  AND COALESCE(l.browser_client_id, '') = ?
+                  AND (
+                    TRIM(COALESCE(l.prefecture, '')) = ''
+                    OR TRIM(COALESCE(l.city, '')) = ''
+                  )
                 """
             , (user["id"], browser_client_id)).fetchall()
     except Exception:
@@ -1508,19 +1536,36 @@ def get_leads(
                     """
                     SELECT l.address, l.prefecture, l.city
                     FROM leads l
-                    WHERE l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
+                    WHERE l.user_id = ?
+                      AND COALESCE(l.browser_client_id, '') = ?
+                      AND (
+                        TRIM(COALESCE(l.prefecture, '')) = ''
+                        OR TRIM(COALESCE(l.city, '')) = ''
+                      )
                     """
                 , (user["id"], browser_client_id)).fetchall()
         except Exception:
             option_rows = []
 
-    prefecture_set: set[str] = set()
-    city_set: set[str] = set()
+    prefecture_set: set[str] = {
+        re.sub(r"\s+", "", str(r["prefecture"] or "").strip())
+        for r in prefecture_rows
+        if str(r["prefecture"] or "").strip()
+    }
+    city_set: set[str] = {
+        re.sub(r"\s+", "", str(r["city"] or "").strip())
+        for r in city_rows
+        if str(r["city"] or "").strip()
+    }
+
     for row in option_rows:
         row_address = str(row["address"] or "")
         parsed = split_jp_address(row_address)
 
-        option_components_json = str((row["address_components_json"] if "address_components_json" in row.keys() else "") or "").strip()
+        try:
+            option_components_json = str(row["address_components_json"] or "").strip()
+        except Exception:
+            option_components_json = ""
         if option_components_json:
             try:
                 parsed_components = json.loads(option_components_json)
