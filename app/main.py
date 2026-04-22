@@ -1153,6 +1153,19 @@ def _contains_any_hint(text: str, hints: tuple[str, ...]) -> bool:
     return any(h.lower() in lowered for h in hints)
 
 
+def _email_matches_domain(email: str, base_url: str) -> bool:
+    """メールアドレスのドメインがサイトのドメインと一致するか確認する。
+    サブドメインも許容する（例: info@mail.example.com は example.com と一致）。"""
+    try:
+        email_domain = email.split("@", 1)[1].lower().strip()
+        site_domain = urlparse(base_url).netloc.lower().strip()
+        # www. などのサブドメインを除いたルートドメインで比較
+        site_root = ".".join(site_domain.split(".")[-2:]) if site_domain.count(".") >= 1 else site_domain
+        return email_domain == site_root or email_domain.endswith("." + site_root)
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def extract_candidate_contact_urls(base_url: str, html: str) -> list[str]:
     parser = ContactFormHTMLParser()
     parser.feed(str(html or "")[:300000])
@@ -1251,6 +1264,12 @@ async def discover_contact_form_info(client: httpx.AsyncClient, website: str) ->
     discovered_email = ""
     visited: set[str] = set()
 
+    def _is_valid_email_for_site(email: str) -> bool:
+        lowered = email.lower()
+        if lowered.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
+            return False
+        return _email_matches_domain(email, resolved_base)
+
     for candidate in candidates:
         if candidate in visited:
             continue
@@ -1264,8 +1283,7 @@ async def discover_contact_form_info(client: httpx.AsyncClient, website: str) ->
             page_parser = ContactFormHTMLParser()
             page_parser.feed(str(html or "")[:300000])
             for mailto_email in page_parser.mailto_emails:
-                lowered = mailto_email.lower()
-                if not lowered.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
+                if _is_valid_email_for_site(mailto_email):
                     discovered_email = mailto_email
                     break
 
@@ -1274,13 +1292,9 @@ async def discover_contact_form_info(client: httpx.AsyncClient, website: str) ->
             matches = EMAIL_REGEX.findall(html)
             for matched in matches:
                 email = str(matched or "").strip()
-                if not email:
-                    continue
-                lowered = email.lower()
-                if lowered.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
-                    continue
-                discovered_email = email
-                break
+                if email and _is_valid_email_for_site(email):
+                    discovered_email = email
+                    break
 
         if not discovered_email:
             # 3. 難読化メール（例: user [at] domain.com）を検索
@@ -1292,7 +1306,7 @@ async def discover_contact_form_info(client: httpx.AsyncClient, website: str) ->
                     obf,
                     flags=re.IGNORECASE,
                 ).strip()
-                if EMAIL_REGEX.fullmatch(normalized):
+                if EMAIL_REGEX.fullmatch(normalized) and _is_valid_email_for_site(normalized):
                     discovered_email = normalized
                     break
 
