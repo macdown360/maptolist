@@ -570,23 +570,29 @@ def now_iso() -> str:
 def get_daily_fetch_usage(user_id: int) -> int:
     """今日のユーザーのデータ取得件数を返す。"""
     today = datetime.now(UTC).strftime("%Y-%m-%d")
-    with get_connection() as conn:
-        row = conn.execute(
-            "SELECT count FROM fetch_usage WHERE user_id = ? AND day = ?",
-            (user_id, today),
-        ).fetchone()
-    return row[0] if row else 0
+    try:
+        with get_connection() as conn:
+            row = conn.execute(
+                "SELECT count FROM fetch_usage WHERE user_id = ? AND day = ?",
+                (user_id, today),
+            ).fetchone()
+        return row[0] if row else 0
+    except Exception:
+        return 0
 
 
 def get_monthly_fetch_usage(user_id: int) -> int:
     """今月のユーザーのデータ取得件数合計を返す。"""
     month_prefix = datetime.now(UTC).strftime("%Y-%m")
-    with get_connection() as conn:
-        row = conn.execute(
-            "SELECT COALESCE(SUM(count), 0) FROM fetch_usage WHERE user_id = ? AND day LIKE ?",
-            (user_id, f"{month_prefix}-%"),
-        ).fetchone()
-    return row[0] if row else 0
+    try:
+        with get_connection() as conn:
+            row = conn.execute(
+                "SELECT COALESCE(SUM(count), 0) FROM fetch_usage WHERE user_id = ? AND day LIKE ?",
+                (user_id, f"{month_prefix}-%"),
+            ).fetchone()
+        return row[0] if row else 0
+    except Exception:
+        return 0
 
 
 def record_fetch_usage(user_id: int, count: int) -> None:
@@ -595,17 +601,21 @@ def record_fetch_usage(user_id: int, count: int) -> None:
         return
     today = datetime.now(UTC).strftime("%Y-%m-%d")
     ts = now_iso()
-    with get_connection() as conn:
-        conn.execute(
-            """
-            INSERT INTO fetch_usage (user_id, day, count, updated_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(user_id, day) DO UPDATE SET
-                count = count + excluded.count,
-                updated_at = excluded.updated_at
-            """,
-            (user_id, today, count, ts),
-        )
+    try:
+        with get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO fetch_usage (user_id, day, count, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(user_id, day) DO UPDATE SET
+                    count = count + excluded.count,
+                    updated_at = excluded.updated_at
+                """,
+                (user_id, today, count, ts),
+            )
+    except Exception:
+        # 既存環境のスキーマ差異で失敗しても本処理は継続させる
+        return
 
 
 def clean_address_text(raw_value: str) -> str:
