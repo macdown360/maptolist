@@ -1456,17 +1456,6 @@ def get_leads(
 
     with get_connection() as conn:
         rows = conn.execute(sql, params).fetchall()
-        option_rows = conn.execute(
-            """
-            SELECT
-                l.address,
-                l.prefecture,
-                l.city,
-                l.address_components_json
-            FROM leads l
-            WHERE l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
-            """
-        , (user["id"], browser_client_id)).fetchall()
         categories = conn.execute(
             """
             SELECT DISTINCT COALESCE(mt.category, l.category) AS c
@@ -1486,13 +1475,42 @@ def get_leads(
             """
         , (user["id"], browser_client_id)).fetchall()
 
+    # option_rows: 別接続で取得（address_components_json カラムが存在しない場合も考慮）
+    option_rows: list[Any] = []
+    try:
+        with get_connection() as conn2:
+            option_rows = conn2.execute(
+                """
+                SELECT
+                    l.address,
+                    l.prefecture,
+                    l.city,
+                    l.address_components_json
+                FROM leads l
+                WHERE l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
+                """
+            , (user["id"], browser_client_id)).fetchall()
+    except Exception:
+        # address_components_json カラムが存在しない旧DBの場合はフォールバック
+        try:
+            with get_connection() as conn3:
+                option_rows = conn3.execute(
+                    """
+                    SELECT l.address, l.prefecture, l.city
+                    FROM leads l
+                    WHERE l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
+                    """
+                , (user["id"], browser_client_id)).fetchall()
+        except Exception:
+            option_rows = []
+
     prefecture_set: set[str] = set()
     city_set: set[str] = set()
     for row in option_rows:
         row_address = str(row["address"] or "")
         parsed = split_jp_address(row_address)
 
-        option_components_json = str(row["address_components_json"] or "").strip()
+        option_components_json = str((row["address_components_json"] if "address_components_json" in row.keys() else "") or "").strip()
         if option_components_json:
             try:
                 parsed_components = json.loads(option_components_json)
