@@ -578,7 +578,7 @@ function renderLeadPreviewFromLocal() {
   persistLeadListState(currentItems);
 
   if (exportResult) {
-    exportResult.textContent = `${currentItems.length}件表示中 (高速プレビュー)`;
+    exportResult.textContent = `${currentItems.length}件表示中`;
   }
 }
 
@@ -1114,11 +1114,16 @@ async function fetchLeads() {
     currentItems = sortLeadItemsClientSide(currentItems, leadSortBy, leadSortDir);
   }
 
+  const selectedPrefecture = String(filterForm.querySelector('select[name="prefecture"]')?.value || '');
+  const selectedCity = String(filterForm.querySelector('select[name="city"]')?.value || '');
+  const selectedCategory = String(filterForm.querySelector('select[name="category"]')?.value || '');
+  const selectedIndustry = String(filterForm.querySelector('select[name="industry"]')?.value || '');
+
   renderLeadsTable(currentItems);
-  renderOptions(prefectureSelect, data.filters.prefectures || [], filterForm.prefecture.value);
-  renderOptions(citySelect, data.filters.cities || [], filterForm.city.value);
-  renderOptions(categorySelect, data.filters.categories || [], filterForm.category.value, toCategoryLabel);
-  renderOptions(industrySelect, data.filters.industries || [], filterForm.industry.value);
+  renderOptions(prefectureSelect, data.filters.prefectures || [], selectedPrefecture);
+  renderOptions(citySelect, data.filters.cities || [], selectedCity);
+  renderOptions(categorySelect, data.filters.categories || [], selectedCategory, toCategoryLabel);
+  renderOptions(industrySelect, data.filters.industries || [], selectedIndustry);
   updateLeadSortIndicators();
   persistLeadListState(currentItems);
 

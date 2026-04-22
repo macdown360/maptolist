@@ -1506,6 +1506,14 @@ def get_leads(
             if not normalized_prefecture or prefecture_value == normalized_prefecture:
                 city_set.add(city_value)
 
+    for row in rows:
+        item_prefecture = re.sub(r"\s+", "", str(row["prefecture"] or "").strip())
+        item_city = re.sub(r"\s+", "", str(row["city"] or "").strip())
+        if item_prefecture:
+            prefecture_set.add(item_prefecture)
+        if item_city and (not normalized_prefecture or item_prefecture == normalized_prefecture):
+            city_set.add(item_city)
+
     prefectures = sorted(prefecture_set)
     cities = sorted(city_set)
 
