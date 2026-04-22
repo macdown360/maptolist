@@ -1456,25 +1456,16 @@ def get_leads(
 
     with get_connection() as conn:
         rows = conn.execute(sql, params).fetchall()
-        prefectures = conn.execute(
+        location_rows = conn.execute(
             """
-            SELECT DISTINCT TRIM(COALESCE(l.prefecture, '')) AS p
+            SELECT
+                l.address,
+                l.prefecture,
+                l.city
             FROM leads l
-            WHERE TRIM(COALESCE(l.prefecture, '')) <> '' AND l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
-            ORDER BY p
+            WHERE l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
             """
         , (user["id"], browser_client_id)).fetchall()
-        cities_params: list[Any] = [user["id"], browser_client_id]
-        cities_sql = """
-            SELECT DISTINCT TRIM(COALESCE(l.city, '')) AS c
-            FROM leads l
-            WHERE TRIM(COALESCE(l.city, '')) <> '' AND l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
-        """
-        if normalized_prefecture:
-            cities_sql += " AND TRIM(COALESCE(l.prefecture, '')) = ?"
-            cities_params.append(normalized_prefecture)
-        cities_sql += " ORDER BY c"
-        cities = conn.execute(cities_sql, cities_params).fetchall()
         categories = conn.execute(
             """
             SELECT DISTINCT COALESCE(mt.category, l.category) AS c
@@ -1493,6 +1484,30 @@ def get_leads(
             ORDER BY i
             """
         , (user["id"], browser_client_id)).fetchall()
+
+    prefecture_set: set[str] = set()
+    city_set: set[str] = set()
+    for row in location_rows:
+        row_address = str(row["address"] or "")
+        parsed = split_jp_address(row_address)
+        parsed_prefecture = re.sub(r"\s+", "", str(parsed.get("prefecture", "") or "").strip())
+        parsed_city = re.sub(r"\s+", "", str(parsed.get("city", "") or "").strip())
+
+        stored_prefecture = re.sub(r"\s+", "", str(row["prefecture"] or "").strip())
+        stored_city = re.sub(r"\s+", "", str(row["city"] or "").strip())
+
+        prefecture_value = stored_prefecture or parsed_prefecture
+        city_value = stored_city or parsed_city
+
+        if prefecture_value:
+            prefecture_set.add(prefecture_value)
+
+        if city_value:
+            if not normalized_prefecture or prefecture_value == normalized_prefecture:
+                city_set.add(city_value)
+
+    prefectures = sorted(prefecture_set)
+    cities = sorted(city_set)
 
     items: list[dict[str, Any]] = []
     for row in rows:
@@ -1527,8 +1542,8 @@ def get_leads(
     return {
         "items": items,
         "filters": {
-            "prefectures": [r[0] for r in prefectures],
-            "cities": [r[0] for r in cities],
+            "prefectures": prefectures,
+            "cities": cities,
             "categories": [r[0] for r in categories],
             "industries": [r[0] for r in industries],
         },
