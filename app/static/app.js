@@ -1521,9 +1521,21 @@ if (placeTypeFilterInput) {
 
 importForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
+
+  const maxResultsRaw = importForm.querySelector('input[name="max_results"]')?.value ?? '';
+  const maxResultsNum = Number(maxResultsRaw);
+  if (maxResultsRaw.trim() === '' || !Number.isInteger(maxResultsNum) || isNaN(maxResultsNum)) {
+    importResult.textContent = 'エラー: 取得件数には数値を入力してください。';
+    return;
+  }
+  if (maxResultsNum < 1 || maxResultsNum > 50) {
+    importResult.textContent = 'エラー: 取得件数は1〜50の範囲で入力してください。';
+    return;
+  }
+
   setBusyStatusWithCat(importResult, '取得中...');
   const payload = Object.fromEntries(new FormData(importForm).entries());
-  payload.max_results = Number(payload.max_results || 20);
+  payload.max_results = maxResultsNum;
 
   const res = await apiFetch('/api/import/google-places', {
     method: 'POST',

@@ -1217,83 +1217,61 @@ textarea:focus-visible {
   flex-wrap: wrap;
 }
 
+/* 黒猫歩きアニメーション */
 .loading-cat {
   position: relative;
-  width: 26px;
-  height: 14px;
+  width: 36px;
+  height: 20px;
   display: inline-block;
-  animation: cat-slide 1s ease-in-out infinite;
+  animation: black-cat-walk 0.6s steps(1) infinite;
 }
 
-.loading-cat-body {
+/* フレーム1: 左足前 */
+.loading-cat::before {
+  content: '';
   position: absolute;
-  left: 4px;
-  top: 3px;
-  width: 13px;
-  height: 7px;
-  border-radius: 10px;
-  background: #f3a95f;
-  border: 1px solid #d78d43;
-  animation: cat-bob 0.22s ease-in-out infinite alternate;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 20'%3E%3C!-- body --%3E%3Cellipse cx='17' cy='11' rx='9' ry='5' fill='%23111'/%3E%3C!-- head --%3E%3Ccircle cx='26' cy='8' r='5' fill='%23111'/%3E%3C!-- ears --%3E%3Cpolygon points='23,4 21,0 25,3' fill='%23111'/%3E%3Cpolygon points='28,4 27,0 30,3' fill='%23111'/%3E%3C!-- eye --%3E%3Ccircle cx='27.5' cy='7.5' r='1' fill='%23ffe066'/%3E%3C!-- tail --%3E%3Cpath d='M8 11 Q2 8 4 4' stroke='%23111' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C!-- legs walk frame1 --%3E%3Cline x1='13' y1='15' x2='11' y2='20' stroke='%23111' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='17' y1='15' x2='19' y2='20' stroke='%23111' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='21' y1='15' x2='23' y2='20' stroke='%23111' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='25' y1='13' x2='23' y2='18' stroke='%23111' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  animation: black-cat-frame 0.6s steps(1) infinite;
 }
 
-.loading-cat-ear {
-  position: absolute;
-  top: 0;
-  width: 0;
-  height: 0;
-  border-left: 3px solid transparent;
-  border-right: 3px solid transparent;
-  border-bottom: 4px solid #d78d43;
-}
-
-.loading-cat-ear-left {
-  left: 5px;
-}
-
-.loading-cat-ear-right {
-  left: 11px;
-}
-
+.loading-cat-body,
+.loading-cat-ear,
+.loading-cat-ear-left,
+.loading-cat-ear-right,
 .loading-cat-tail {
-  position: absolute;
-  right: 3px;
-  top: 4px;
-  width: 8px;
-  height: 3px;
-  border-radius: 999px;
-  border: 1px solid #d78d43;
-  border-left: 0;
-  transform-origin: left center;
-  animation: cat-tail 0.32s ease-in-out infinite alternate;
+  display: none;
 }
 
 .loading-cat::after {
   content: '';
   position: absolute;
   left: 0;
-  bottom: 0;
+  bottom: -3px;
   width: 100%;
   height: 2px;
-  background: repeating-linear-gradient(90deg, rgba(100, 116, 141, 0.65) 0 2px, transparent 2px 4px);
-  opacity: 0.35;
-  animation: cat-track 0.8s linear infinite;
+  background: repeating-linear-gradient(90deg, rgba(100, 116, 141, 0.55) 0 2px, transparent 2px 4px);
+  opacity: 0.4;
+  animation: cat-track 0.6s linear infinite;
 }
 
-@keyframes cat-slide {
-  0% { transform: translateX(-2px); }
-  50% { transform: translateX(2px); }
-  100% { transform: translateX(-2px); }
+@keyframes black-cat-frame {
+  0%, 100% {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 20'%3E%3Cellipse cx='17' cy='11' rx='9' ry='5' fill='%23111'/%3E%3Ccircle cx='26' cy='8' r='5' fill='%23111'/%3E%3Cpolygon points='23,4 21,0 25,3' fill='%23111'/%3E%3Cpolygon points='28,4 27,0 30,3' fill='%23111'/%3E%3Ccircle cx='27.5' cy='7.5' r='1' fill='%23ffe066'/%3E%3Cpath d='M8 11 Q2 8 4 4' stroke='%23111' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3Cline x1='12' y1='15' x2='10' y2='20' stroke='%23111' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='17' y1='15' x2='17' y2='20' stroke='%23111' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='22' y1='15' x2='24' y2='20' stroke='%23111' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='25' y1='13' x2='25' y2='18' stroke='%23111' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+  }
+  50% {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 20'%3E%3Cellipse cx='17' cy='11' rx='9' ry='5' fill='%23111'/%3E%3Ccircle cx='26' cy='8' r='5' fill='%23111'/%3E%3Cpolygon points='23,4 21,0 25,3' fill='%23111'/%3E%3Cpolygon points='28,4 27,0 30,3' fill='%23111'/%3E%3Ccircle cx='27.5' cy='7.5' r='1' fill='%23ffe066'/%3E%3Cpath d='M8 11 Q3 13 4 16' stroke='%23111' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3Cline x1='12' y1='15' x2='14' y2='20' stroke='%23111' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='17' y1='15' x2='15' y2='20' stroke='%23111' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='22' y1='15' x2='20' y2='20' stroke='%23111' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='25' y1='13' x2='27' y2='18' stroke='%23111' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+  }
 }
 
-@keyframes cat-bob {
-  0% { transform: translateY(0); }
-  100% { transform: translateY(-1px); }
-}
-
-@keyframes cat-tail {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(24deg); }
+@keyframes black-cat-walk {
+  0% { transform: translateX(0) translateY(0); }
+  25% { transform: translateX(1px) translateY(-1px); }
+  50% { transform: translateX(0) translateY(0); }
+  75% { transform: translateX(-1px) translateY(-1px); }
+  100% { transform: translateX(0) translateY(0); }
 }
 
 @keyframes cat-track {
