@@ -1537,11 +1537,17 @@ importForm?.addEventListener('submit', async (e) => {
   const payload = Object.fromEntries(new FormData(importForm).entries());
   payload.max_results = maxResultsNum;
 
-  const res = await apiFetch('/api/import/google-places', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+  let res;
+  try {
+    res = await apiFetch('/api/import/google-places', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    importResult.textContent = `エラー: ${err instanceof Error ? err.message : String(err)}`;
+    return;
+  }
   if (!res) return;
   const data = await res.json();
 
