@@ -253,6 +253,21 @@ function showToast(message, kind = 'info') {
   }, 2200);
 }
 
+function setBusyStatusWithCat(target, message) {
+  if (!target) return;
+  target.innerHTML = `
+    <span class="status-with-cat">
+      <span>${escapeHtml(message)}</span>
+      <span class="loading-cat" aria-hidden="true">
+        <span class="loading-cat-body"></span>
+        <span class="loading-cat-ear loading-cat-ear-left"></span>
+        <span class="loading-cat-ear loading-cat-ear-right"></span>
+        <span class="loading-cat-tail"></span>
+      </span>
+    </span>
+  `;
+}
+
 function switchView(viewName) {
   document.querySelectorAll('.menu-item').forEach((el) => {
     el.classList.toggle('active', el.dataset.view === viewName);
@@ -1360,7 +1375,7 @@ async function discoverSelectedContactForms() {
     return;
   }
 
-  if (exportResult) exportResult.textContent = '問い合わせフォーム・メールアドレスを探索中...';
+  setBusyStatusWithCat(exportResult, '問い合わせフォーム・メールアドレスを探索中...');
 
   const res = await apiFetch('/api/contact-forms/discover', {
     method: 'POST',
@@ -1500,7 +1515,7 @@ if (placeTypeFilterInput) {
 
 importForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
-  importResult.textContent = '取得中...';
+  setBusyStatusWithCat(importResult, '取得中...');
   const payload = Object.fromEntries(new FormData(importForm).entries());
   payload.max_results = Number(payload.max_results || 20);
 
