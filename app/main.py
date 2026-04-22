@@ -1456,12 +1456,13 @@ def get_leads(
 
     with get_connection() as conn:
         rows = conn.execute(sql, params).fetchall()
-        location_rows = conn.execute(
+        option_rows = conn.execute(
             """
             SELECT
                 l.address,
                 l.prefecture,
-                l.city
+                l.city,
+                l.address_components_json
             FROM leads l
             WHERE l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
             """
@@ -1487,9 +1488,22 @@ def get_leads(
 
     prefecture_set: set[str] = set()
     city_set: set[str] = set()
-    for row in location_rows:
+    for row in option_rows:
         row_address = str(row["address"] or "")
         parsed = split_jp_address(row_address)
+
+        option_components_json = str(row["address_components_json"] or "").strip()
+        if option_components_json:
+            try:
+                parsed_components = json.loads(option_components_json)
+                if isinstance(parsed_components, list):
+                    from_components = parse_address_components(parsed_components)
+                    for k, v in from_components.items():
+                        if v:
+                            parsed[k] = v
+            except json.JSONDecodeError:
+                pass
+
         parsed_prefecture = re.sub(r"\s+", "", str(parsed.get("prefecture", "") or "").strip())
         parsed_city = re.sub(r"\s+", "", str(parsed.get("city", "") or "").strip())
 
@@ -1505,14 +1519,6 @@ def get_leads(
         if city_value:
             if not normalized_prefecture or prefecture_value == normalized_prefecture:
                 city_set.add(city_value)
-
-    for row in rows:
-        item_prefecture = re.sub(r"\s+", "", str(row["prefecture"] or "").strip())
-        item_city = re.sub(r"\s+", "", str(row["city"] or "").strip())
-        if item_prefecture:
-            prefecture_set.add(item_prefecture)
-        if item_city and (not normalized_prefecture or item_prefecture == normalized_prefecture):
-            city_set.add(item_city)
 
     prefectures = sorted(prefecture_set)
     cities = sorted(city_set)
