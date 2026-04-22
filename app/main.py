@@ -1383,6 +1383,8 @@ def get_leads(
     request: Request,
     user: CurrentUser,
     q: str = Query("", description="会社名や住所で検索"),
+    prefecture: str = Query("", description="都道府県フィルタ"),
+    city: str = Query("", description="市区町村フィルタ"),
     category: str = Query("", description="業種フィルタ"),
     industry: str = Query("", description="業界フィルタ"),
     sort_by: str = Query("updated_at", description="並び替え項目"),
@@ -1411,9 +1413,17 @@ def get_leads(
         sql += " AND (l.name LIKE ? OR l.address LIKE ? OR l.website LIKE ?)"
         like_q = f"%{normalized_q}%"
         params.extend([like_q, like_q, like_q])
+    normalized_prefecture = prefecture.strip()
+    normalized_city = city.strip()
     normalized_category = category.strip()
     normalized_industry = industry.strip()
 
+    if normalized_prefecture:
+        sql += " AND TRIM(COALESCE(l.prefecture, '')) = ?"
+        params.append(normalized_prefecture)
+    if normalized_city:
+        sql += " AND TRIM(COALESCE(l.city, '')) = ?"
+        params.append(normalized_city)
     if normalized_category:
         sql += " AND TRIM(COALESCE(mt.category, l.category)) = ?"
         params.append(normalized_category)
@@ -1446,6 +1456,25 @@ def get_leads(
 
     with get_connection() as conn:
         rows = conn.execute(sql, params).fetchall()
+        prefectures = conn.execute(
+            """
+            SELECT DISTINCT TRIM(COALESCE(l.prefecture, '')) AS p
+            FROM leads l
+            WHERE TRIM(COALESCE(l.prefecture, '')) <> '' AND l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
+            ORDER BY p
+            """
+        , (user["id"], browser_client_id)).fetchall()
+        cities_params: list[Any] = [user["id"], browser_client_id]
+        cities_sql = """
+            SELECT DISTINCT TRIM(COALESCE(l.city, '')) AS c
+            FROM leads l
+            WHERE TRIM(COALESCE(l.city, '')) <> '' AND l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
+        """
+        if normalized_prefecture:
+            cities_sql += " AND TRIM(COALESCE(l.prefecture, '')) = ?"
+            cities_params.append(normalized_prefecture)
+        cities_sql += " ORDER BY c"
+        cities = conn.execute(cities_sql, cities_params).fetchall()
         categories = conn.execute(
             """
             SELECT DISTINCT COALESCE(mt.category, l.category) AS c
@@ -1498,6 +1527,8 @@ def get_leads(
     return {
         "items": items,
         "filters": {
+            "prefectures": [r[0] for r in prefectures],
+            "cities": [r[0] for r in cities],
             "categories": [r[0] for r in categories],
             "industries": [r[0] for r in industries],
         },

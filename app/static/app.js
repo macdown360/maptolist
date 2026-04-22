@@ -36,6 +36,8 @@ const contactFormsTbody = document.querySelector('#contact-forms-table tbody');
 
 const categorySelect = document.querySelector('select[name="category"]');
 const industrySelect = document.querySelector('select[name="industry"]');
+const prefectureSelect = document.querySelector('select[name="prefecture"]');
+const citySelect = document.querySelector('select[name="city"]');
 const placeTypeSelect = document.querySelector('#place-type-select');
 const placeTypeFilterInput = document.querySelector('#place-type-filter');
 const importQueryInput = document.querySelector('#import-form input[name="query"]');
@@ -67,6 +69,7 @@ let myListItems = [];
 let placeTypeItems = [];
 let leadSortBy = 'updated_at';
 let leadSortDir = 'desc';
+let leadPreviewSourceItems = [];
 let leadFetchController = null;
 let leadFetchRequestSeq = 0;
 let leadFilterAutoSearchTimerId = null;
@@ -301,6 +304,8 @@ function getNormalizedLeadFilters() {
   if (!filterForm) {
     return {
       q: '',
+      prefecture: '',
+      city: '',
       category: '',
       industry: '',
     };
@@ -309,6 +314,8 @@ function getNormalizedLeadFilters() {
   const formData = new FormData(filterForm);
   return {
     q: String(formData.get('q') || '').trim(),
+    prefecture: String(formData.get('prefecture') || '').trim(),
+    city: String(formData.get('city') || '').trim(),
     category: String(formData.get('category') || '').trim(),
     industry: String(formData.get('industry') || '').trim(),
   };
@@ -355,6 +362,8 @@ function persistLeadListState(items = currentItems) {
   const normalizedFilters = getNormalizedLeadFilters();
   setStoredJson(LEADS_FILTER_STORAGE_KEY, {
     q: normalizedFilters.q,
+    prefecture: normalizedFilters.prefecture,
+    city: normalizedFilters.city,
     category: normalizedFilters.category,
     industry: normalizedFilters.industry,
     sortBy: leadSortBy,
@@ -379,10 +388,14 @@ function hydrateLeadListState() {
   if (filterForm) {
     const filters = getStoredJson(LEADS_FILTER_STORAGE_KEY, {});
     const qInput = filterForm.querySelector('input[name="q"]');
+    const prefectureInput = filterForm.querySelector('select[name="prefecture"]');
+    const cityInput = filterForm.querySelector('select[name="city"]');
     const categoryInput = filterForm.querySelector('select[name="category"]');
     const industryInput = filterForm.querySelector('select[name="industry"]');
 
     if (qInput && typeof filters.q === 'string') qInput.value = filters.q;
+    if (prefectureInput && typeof filters.prefecture === 'string') prefectureInput.value = filters.prefecture;
+    if (cityInput && typeof filters.city === 'string') cityInput.value = filters.city;
     if (categoryInput && typeof filters.category === 'string') categoryInput.value = filters.category;
     if (industryInput && typeof filters.industry === 'string') industryInput.value = filters.industry;
     if (typeof filters.sortBy === 'string' && filters.sortBy) leadSortBy = filters.sortBy;
@@ -503,6 +516,55 @@ function sortLeadItemsClientSide(items, sortBy, sortDir) {
     }
     return compareNullable(a.updated_at, b.updated_at, 'desc');
   });
+}
+
+function applyLeadFiltersClientSide(items, filters = {}) {
+  const q = String(filters.q || '').trim().toLowerCase();
+  const prefecture = String(filters.prefecture || '').trim();
+  const city = String(filters.city || '').trim();
+  const category = String(filters.category || '').trim();
+  const industry = String(filters.industry || '').trim();
+
+  return (Array.isArray(items) ? items : []).filter((item) => {
+    const effectivePrefecture = String(item?.prefecture || '').trim();
+    const effectiveCity = String(item?.city || '').trim();
+    const effectiveCategory = String(item?.effective_category || item?.category || '').trim();
+    const effectiveIndustry = String(item?.effective_industry || item?.industry || '').trim();
+
+    if (prefecture && effectivePrefecture !== prefecture) return false;
+    if (city && effectiveCity !== city) return false;
+    if (category && effectiveCategory !== category) return false;
+    if (industry && effectiveIndustry !== industry) return false;
+
+    if (!q) return true;
+
+    const haystack = [
+      item?.name,
+      item?.address,
+      item?.website,
+      item?.prefecture,
+      item?.city,
+      item?.address_detail,
+    ]
+      .map((v) => String(v || '').toLowerCase())
+      .join(' ');
+    return haystack.includes(q);
+  });
+}
+
+function renderLeadPreviewFromLocal() {
+  const normalizedFilters = getNormalizedLeadFilters();
+  const baseItems = leadPreviewSourceItems.length ? leadPreviewSourceItems : currentItems;
+  const previewItems = sortLeadItemsClientSide(applyLeadFiltersClientSide(baseItems, normalizedFilters), leadSortBy, leadSortDir);
+
+  currentItems = previewItems;
+  renderLeadsTable(currentItems);
+  updateLeadSortIndicators();
+  persistLeadListState(currentItems);
+
+  if (exportResult) {
+    exportResult.textContent = `${currentItems.length}件表示中 (高速プレビュー)`;
+  }
 }
 
 function renderMyListTable(items) {
@@ -978,6 +1040,8 @@ async function fetchLeads() {
   const normalizedFilters = getNormalizedLeadFilters();
   const params = new URLSearchParams();
   if (normalizedFilters.q) params.set('q', normalizedFilters.q);
+  if (normalizedFilters.prefecture) params.set('prefecture', normalizedFilters.prefecture);
+  if (normalizedFilters.city) params.set('city', normalizedFilters.city);
   if (normalizedFilters.category) params.set('category', normalizedFilters.category);
   if (normalizedFilters.industry) params.set('industry', normalizedFilters.industry);
   params.set('sort_by', leadSortBy);
@@ -1022,6 +1086,12 @@ async function fetchLeads() {
   }
 
   const serverItems = Array.isArray(data.items) ? data.items : [];
+  if (!normalizedFilters.q && !normalizedFilters.prefecture && !normalizedFilters.city && !normalizedFilters.category && !normalizedFilters.industry) {
+    leadPreviewSourceItems = serverItems;
+  } else if (!leadPreviewSourceItems.length) {
+    leadPreviewSourceItems = serverItems;
+  }
+
   currentItems = sortLeadItemsClientSide(serverItems, leadSortBy, leadSortDir);
   if (data.sort) {
     leadSortBy = data.sort.sort_by || leadSortBy;
@@ -1030,6 +1100,8 @@ async function fetchLeads() {
   }
 
   renderLeadsTable(currentItems);
+  renderOptions(prefectureSelect, data.filters.prefectures || [], filterForm.prefecture.value);
+  renderOptions(citySelect, data.filters.cities || [], filterForm.city.value);
   renderOptions(categorySelect, data.filters.categories || [], filterForm.category.value, toCategoryLabel);
   renderOptions(industrySelect, data.filters.industries || [], filterForm.industry.value);
   updateLeadSortIndicators();
@@ -1046,6 +1118,8 @@ async function fetchLeads() {
 }
 
 function scheduleLeadFilterAutoSearch(sourceLabel) {
+  renderLeadPreviewFromLocal();
+
   if (leadFilterAutoSearchTimerId) {
     window.clearTimeout(leadFilterAutoSearchTimerId);
   }
@@ -1469,6 +1543,14 @@ filterForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
   await fetchLeads();
   addActivity(`一覧を更新: ${currentItems.length}件`, 'system');
+});
+
+prefectureSelect?.addEventListener('change', async () => {
+  scheduleLeadFilterAutoSearch('都道府県');
+});
+
+citySelect?.addEventListener('change', async () => {
+  scheduleLeadFilterAutoSearch('市区町村');
 });
 
 categorySelect?.addEventListener('change', async () => {

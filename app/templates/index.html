@@ -57,9 +57,10 @@
           <h3>取得結果一覧</h3>
           <form id="filter-form" class="form-grid compact">
             <label>検索<input name="q" placeholder="会社名/住所/URL" /></label>
+            <label>都道府県<select name="prefecture"><option value="">すべて</option></select></label>
+            <label>市区町村<select name="city"><option value="">すべて</option></select></label>
             <label>業種<select name="category"><option value="">すべて</option></select></label>
             <label>業界<select name="industry"><option value="">すべて</option></select></label>
-            <button type="submit">再検索</button>
           </form>
           <div class="export-tools">
             <button type="button" id="export-csv-btn" class="ghost">CSV出力</button>
