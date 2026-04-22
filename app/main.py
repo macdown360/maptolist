@@ -33,6 +33,10 @@ from app.db import get_connection
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 EMAIL_REGEX = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+OBFUSCATED_EMAIL_REGEX = re.compile(
+    r"[A-Za-z0-9._%+-]+\s*(?:\[at\]|\(at\)|\s+at\s+|\[＠\]|【at】)\s*[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
+    re.IGNORECASE,
+)
 POSTAL_CODE_REGEX = re.compile(r"〒?\s*(\d{3})[-ー]?\s*(\d{4})")
 COUNTRY_PREFIX_REGEX = re.compile(r"^(?:日本|Japan)[、,\s　]*", re.IGNORECASE)
 PREFECTURE_REGEX = re.compile(
@@ -1056,6 +1060,7 @@ class ContactFormHTMLParser(HTMLParser):
         self.form_hints: list[str] = []
         self.text_parts: list[str] = []
         self.title_parts: list[str] = []
+        self.mailto_emails: list[str] = []
         self._current_href = ""
         self._current_link_text: list[str] = []
         self._in_title = False
@@ -1066,6 +1071,11 @@ class ContactFormHTMLParser(HTMLParser):
         if normalized_tag == "a":
             self._current_href = attr_map.get("href", "")
             self._current_link_text = []
+            mailto_href = self._current_href
+            if mailto_href.lower().startswith("mailto:"):
+                raw = mailto_href[7:].split("?")[0].strip()
+                if EMAIL_REGEX.fullmatch(raw):
+                    self.mailto_emails.append(raw)
         elif normalized_tag == "form":
             self.form_count += 1
             for key in ("action", "id", "class", "name"):
@@ -1250,6 +1260,17 @@ async def discover_contact_form_info(client: httpx.AsyncClient, website: str) ->
             continue
 
         if not discovered_email:
+            # 1. mailto: リンクから直接抽出（最優先・最も信頼度が高い）
+            page_parser = ContactFormHTMLParser()
+            page_parser.feed(str(html or "")[:300000])
+            for mailto_email in page_parser.mailto_emails:
+                lowered = mailto_email.lower()
+                if not lowered.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
+                    discovered_email = mailto_email
+                    break
+
+        if not discovered_email:
+            # 2. HTML全体を正規表現でスキャン
             matches = EMAIL_REGEX.findall(html)
             for matched in matches:
                 email = str(matched or "").strip()
@@ -1260,6 +1281,20 @@ async def discover_contact_form_info(client: httpx.AsyncClient, website: str) ->
                     continue
                 discovered_email = email
                 break
+
+        if not discovered_email:
+            # 3. 難読化メール（例: user [at] domain.com）を検索
+            obf_matches = OBFUSCATED_EMAIL_REGEX.findall(html)
+            for obf in obf_matches:
+                normalized = re.sub(
+                    r"\s*(?:\[at\]|\(at\)|\s+at\s+|\[＠\]|【at】)\s*",
+                    "@",
+                    obf,
+                    flags=re.IGNORECASE,
+                ).strip()
+                if EMAIL_REGEX.fullmatch(normalized):
+                    discovered_email = normalized
+                    break
 
         analysis = analyze_contact_page(final_url, html)
         if analysis["score"] > best["score"]:
