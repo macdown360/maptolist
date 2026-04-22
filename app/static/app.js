@@ -1119,6 +1119,7 @@ async function fetchLeads() {
   const selectedCategory = String(filterForm.querySelector('select[name="category"]')?.value || '');
   const selectedIndustry = String(filterForm.querySelector('select[name="industry"]')?.value || '');
 
+  console.log('[DEBUG] filters from API:', JSON.stringify(data.filters));
   renderLeadsTable(currentItems);
   renderOptions(prefectureSelect, data.filters.prefectures || [], selectedPrefecture);
   renderOptions(citySelect, data.filters.cities || [], selectedCity);
