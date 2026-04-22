@@ -547,7 +547,7 @@ def init_db() -> None:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS fetch_usage (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL,
                 day TEXT NOT NULL,
                 count INTEGER NOT NULL DEFAULT 0,
