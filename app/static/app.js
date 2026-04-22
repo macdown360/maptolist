@@ -1082,7 +1082,6 @@ async function fetchLeads() {
       renderLeadsTable(currentItems);
       updateLeadSortIndicators();
       addActivity('通信エラーのため前回取得した一覧を表示しています', 'system');
-      showToast('前回取得した一覧を表示しています', 'info');
       return;
     }
     throw err;
