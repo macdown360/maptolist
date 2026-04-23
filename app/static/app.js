@@ -900,7 +900,7 @@ function updateProposalPreview() {
   const senderName = String(formData.get('sender_name') || '').trim();
   const senderWebsite = String(formData.get('sender_website') || '').trim();
   const serviceDescription = String(formData.get('service_description') || '').trim();
-  const targetLength = Math.min(800, Math.max(120, Number(formData.get('target_length') || 280)));
+  const targetLength = Math.min(500, Math.max(120, Number(formData.get('target_length') || 280)));
   const paragraphs = normalizeProposalParagraphs(serviceDescription);
 
   if (!senderCompany || !senderName || !senderWebsite || !serviceDescription) {
