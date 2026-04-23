@@ -578,12 +578,12 @@ td {
 
 #contact-forms-table th:nth-child(1),
 #contact-forms-table td:nth-child(1) {
-  width: 35%;
+  width: 40%;
 }
 
 #contact-forms-table th:nth-child(2),
 #contact-forms-table td:nth-child(2) {
-  width: 25%;
+  width: 30%;
 }
 
 #contact-forms-table th:nth-child(3),
