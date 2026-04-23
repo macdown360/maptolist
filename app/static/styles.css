@@ -541,7 +541,12 @@ td {
 
 #proposal-generator-form {
   width: 100%;
-  grid-template-columns: 30% 30% 30% 10%;
+  grid-template-columns: minmax(0, 30fr) minmax(0, 30fr) minmax(0, 30fr) minmax(0, 10fr);
+  align-items: start;
+}
+
+#proposal-generator-form > label {
+  min-width: 0;
 }
 
 .proposal-section-title {
