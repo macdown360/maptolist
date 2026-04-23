@@ -814,10 +814,42 @@ function formatUrlLabel(value) {
 function normalizeContactDiscoveryItem(item) {
   const src = item || {};
   const checkedAtRaw = String(src.checked_at || '').trim();
+  const proposalGeneratedAtRaw = String(src.proposal_generated_at || '').trim();
   return {
     ...src,
     checked_at: checkedAtRaw,
+    proposal_generated_at: proposalGeneratedAtRaw,
   };
+}
+
+function markProposalGeneratedAt(leadId, leadName = '') {
+  const normalizedLeadId = Number(leadId);
+  if (!Number.isInteger(normalizedLeadId) || normalizedLeadId <= 0) return false;
+
+  const items = getStoredContactFormItems();
+  if (!Array.isArray(items) || !items.length) return false;
+
+  const nowIso = new Date().toISOString();
+  let updated = false;
+  const patchedItems = items.map((item) => {
+    if (Number(item?.lead_id) !== normalizedLeadId) return item;
+    updated = true;
+    return {
+      ...item,
+      proposal_generated_at: nowIso,
+    };
+  });
+
+  if (!updated) return false;
+
+  const normalizedItems = patchedItems.map(normalizeContactDiscoveryItem);
+  persistContactFormsState(normalizedItems);
+  renderContactFormsTable(normalizedItems);
+  if (contactFormsResult) {
+    contactFormsResult.textContent = `${normalizedItems.length}件の問い合わせフォーム情報を表示中`;
+  }
+  addActivity(`提案文生成日を更新: ${leadName || '名称未設定'}`, 'user');
+  return true;
 }
 
 function hydrateContactFormsState() {
@@ -849,7 +881,7 @@ function renderContactFormsTable(items) {
           <td>
             <div class="lead-name-with-action">
               <span>${escapeHtml(item.lead_name || '名称未設定')}</span>
-              <button type="button" class="ghost generate-proposal-btn" data-lead-name="${escapeHtml(item.lead_name || '')}">提案文生成</button>
+              <button type="button" class="ghost generate-proposal-btn" data-lead-id="${Number(item.lead_id) || ''}" data-lead-name="${escapeHtml(item.lead_name || '')}">提案文生成</button>
             </div>
           </td>
           <td>
@@ -858,7 +890,7 @@ function renderContactFormsTable(items) {
           <td>
             ${item.form_url ? `<a class="table-link form-link open-form-link" href="${escapeHtml(item.form_url)}" data-form-url="${escapeHtml(item.form_url)}" data-lead-name="${escapeHtml(item.lead_name || '')}" data-website="${escapeHtml(item.website || '')}" target="_blank" rel="noopener noreferrer">フォームを開く</a><div class="mini-url">${escapeHtml(formatUrlLabel(item.form_url))}</div>` : '<span class="muted">-</span>'}
           </td>
-          <td class="date-cell">${escapeHtml(formatDateOnly(item.checked_at || ''))}</td>
+          <td class="date-cell">${item.proposal_generated_at ? escapeHtml(formatDateOnly(item.proposal_generated_at)) : '<span class="muted">-</span>'}</td>
         </tr>
       `,
     )
@@ -1385,7 +1417,7 @@ async function fetchContactForms() {
   }
 
   const serverItems = Array.isArray(data.items) ? data.items : [];
-  const items = mergeContactFormItems([], serverItems).map(normalizeContactDiscoveryItem);
+  const items = mergeContactFormItems(getStoredContactFormItems(), serverItems).map(normalizeContactDiscoveryItem);
   renderContactFormsTable(items);
   persistContactFormsState(items);
   if (contactFormsResult) contactFormsResult.textContent = `${items.length}件の問い合わせフォーム情報を表示中`;
@@ -1720,10 +1752,14 @@ contactFormsTbody?.addEventListener('click', (e) => {
   const generateBtn = target.closest('.generate-proposal-btn');
   if (generateBtn) {
     const leadName = String(generateBtn.dataset.leadName || '').trim();
+    const leadId = Number(generateBtn.dataset.leadId || 0);
+    const updated = markProposalGeneratedAt(leadId, leadName);
     proposalGeneratorForm?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     proposalGeneratorForm?.querySelector('input[name="service_description"]')?.focus();
-    showToast('提案文入力欄へ移動しました', 'info');
-    addActivity(`提案文生成を開始: ${leadName || '名称未設定'}`, 'user');
+    showToast(updated ? '提案文生成日を更新しました' : '提案文入力欄へ移動しました', 'info');
+    if (!updated) {
+      addActivity(`提案文生成を開始: ${leadName || '名称未設定'}`, 'user');
+    }
     return;
   }
 
