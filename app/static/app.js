@@ -789,8 +789,31 @@ async function applyHistoryRange(range) {
 function formatDateOnly(value) {
   const text = String(value || '').trim();
   if (!text) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    return text.replaceAll('-', '/');
+  }
+
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) {
+    return new Intl.DateTimeFormat('ja-JP', {
+      timeZone: 'Asia/Tokyo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(parsed);
+  }
+
   const datePart = text.includes('T') ? text.split('T')[0] : text;
   return datePart.replaceAll('-', '/');
+}
+
+function getCurrentJstDateString() {
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
 }
 
 function shortenText(value, maxLength = 48) {
@@ -829,14 +852,14 @@ function markProposalGeneratedAt(leadId, leadName = '') {
   const items = getStoredContactFormItems();
   if (!Array.isArray(items) || !items.length) return false;
 
-  const nowIso = new Date().toISOString();
+  const nowJstDate = getCurrentJstDateString();
   let updated = false;
   const patchedItems = items.map((item) => {
     if (Number(item?.lead_id) !== normalizedLeadId) return item;
     updated = true;
     return {
       ...item,
-      proposal_generated_at: nowIso,
+      proposal_generated_at: nowJstDate,
     };
   });
 
