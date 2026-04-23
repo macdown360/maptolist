@@ -541,7 +541,7 @@ td {
 
 #proposal-generator-form {
   width: 100%;
-  grid-template-columns: 31% 31% 31% 7%;
+  grid-template-columns: minmax(0, 30fr) minmax(0, 30fr) minmax(0, 30fr) minmax(0, 10fr);
 }
 
 .proposal-section-title {
