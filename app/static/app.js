@@ -65,10 +65,8 @@ const myListDefaultStatus = document.querySelector('#my-list-default-status');
 const myListDefaultPriority = document.querySelector('#my-list-default-priority');
 const proposalGeneratorForm = document.querySelector('#proposal-generator-form');
 const proposalTargetSummary = document.querySelector('#proposal-target-summary');
-const proposalSubjectOutput = document.querySelector('#proposal-subject');
-const proposalBodyOutput = document.querySelector('#proposal-body');
+const proposalPreviewText = document.querySelector('#proposal-preview-text');
 const proposalGeneratorResult = document.querySelector('#proposal-generator-result');
-const copyProposalSubjectBtn = document.querySelector('#copy-proposal-subject-btn');
 const copyProposalBodyBtn = document.querySelector('#copy-proposal-body-btn');
 
 let currentItems = [];
@@ -889,42 +887,120 @@ function updateProposalTargetSummary() {
   proposalTargetSummary.textContent = buildProposalTargetSummary();
 }
 
-function formatProposalSubject(serviceDescription, senderCompany) {
-  const compactService = String(serviceDescription || '').replace(/\s+/g, ' ').trim();
-  const clippedService = compactService.length > 36 ? `${compactService.slice(0, 36)}...` : compactService;
-  return `【${senderCompany}】${clippedService}のご提案`;
+function normalizeProposalParagraphs(text) {
+  return String(text || '')
+    .split(/\n\s*\n|\r\n\s*\r\n/)
+    .map((paragraph) => paragraph.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
 }
 
-function buildProposalDraft({ senderCompany, senderName, senderWebsite, serviceDescription }, selectedItems = getSelectedLeadItems()) {
+function fitParagraphsToLength(paragraphs, maxLength) {
+  const normalizedMaxLength = Math.max(40, Number(maxLength) || 0);
+  const output = [];
+  let consumed = 0;
+
+  for (const paragraph of paragraphs) {
+    if (consumed >= normalizedMaxLength) break;
+    const remaining = normalizedMaxLength - consumed;
+    if (paragraph.length <= remaining) {
+      output.push(paragraph);
+      consumed += paragraph.length + 2;
+      continue;
+    }
+
+    if (remaining > 8) {
+      output.push(`${paragraph.slice(0, remaining - 1).trim()}…`);
+    }
+    break;
+  }
+
+  return output.length ? output : ['詳細は個別にご案内いたします。'];
+}
+
+function buildProposalDraft({ senderCompany, senderName, senderWebsite, serviceDescription, targetLength }, selectedItems = getSelectedLeadItems()) {
   const targetName = selectedItems.length === 1 ? String(selectedItems[0].name || '').trim() : '';
   const greeting = targetName ? `${targetName} ご担当者様` : 'ご担当者様';
   const referenceLine = targetName
     ? `${targetName}様の事業内容を拝見し、お役に立てる可能性があると感じてご連絡いたしました。`
     : '貴社の取り組みに対して、お役に立てる可能性があると感じてご連絡いたしました。';
-  const body = [
+  const target = Math.min(800, Math.max(120, Number(targetLength) || 280));
+  const templateBase = [
     greeting,
     '',
     '突然のご連絡失礼いたします。',
     `${senderCompany}の${senderName}と申します。`,
     '',
-    `弊社では、${serviceDescription}をご提供しています。`,
+    'ご提案内容は以下の通りです。',
+    '',
     referenceLine,
     '',
-    'もしご関心をお持ちいただけましたら、',
-    '詳細資料や活用イメージを簡潔にご案内いたします。',
-    'ご都合のよいタイミングでご返信いただけますと幸いです。',
+    'ご関心があれば、詳細資料や活用イメージをご案内いたします。',
+    'ご返信いただけますと幸いです。',
     '',
     '何卒よろしくお願いいたします。',
     '',
     senderCompany,
     senderName,
     senderWebsite,
-  ].join('\n');
+  ];
+  const baseLength = templateBase.join('\n').length;
+  const paragraphs = normalizeProposalParagraphs(serviceDescription);
+  const paragraphBudget = Math.max(60, target - baseLength);
+  const fittedParagraphs = fitParagraphsToLength(paragraphs, paragraphBudget);
+  const body = [
+    greeting,
+    '',
+    '突然のご連絡失礼いたします。',
+    `${senderCompany}の${senderName}と申します。`,
+    '',
+    'ご提案内容は以下の通りです。',
+    '',
+    ...fittedParagraphs.flatMap((paragraph) => [paragraph, '']),
+    referenceLine,
+    '',
+    'ご関心があれば、詳細資料や活用イメージをご案内いたします。',
+    'ご返信いただけますと幸いです。',
+    '',
+    '何卒よろしくお願いいたします。',
+    '',
+    senderCompany,
+    senderName,
+    senderWebsite,
+  ].join('\n').trim();
 
   return {
-    subject: formatProposalSubject(serviceDescription, senderCompany),
     body,
+    currentLength: body.length,
+    targetLength: target,
   };
+}
+
+function updateProposalPreview() {
+  if (!proposalGeneratorForm || !proposalPreviewText || !proposalGeneratorResult) return;
+
+  const formData = new FormData(proposalGeneratorForm);
+  const senderCompany = String(formData.get('sender_company') || '').trim();
+  const senderName = String(formData.get('sender_name') || '').trim();
+  const senderWebsite = String(formData.get('sender_website') || '').trim();
+  const serviceDescription = String(formData.get('service_description') || '').trim();
+  const targetLength = Number(formData.get('target_length') || 280);
+
+  if (!senderCompany || !senderName || !senderWebsite || !serviceDescription) {
+    proposalPreviewText.textContent = '入力内容に応じてここへ自動表示されます。';
+    proposalGeneratorResult.textContent = '必要事項を入力すると自動で提案文を更新します。';
+    return;
+  }
+
+  const draft = buildProposalDraft({
+    senderCompany,
+    senderName,
+    senderWebsite,
+    serviceDescription,
+    targetLength,
+  });
+
+  proposalPreviewText.textContent = draft.body;
+  proposalGeneratorResult.textContent = `提案文を自動更新しました。現在 ${draft.currentLength} 文字 / 目安 ${draft.targetLength} 文字です。`;
 }
 
 function exportRowsFromLeadItems(items) {
@@ -1722,50 +1798,12 @@ historyTimeline?.addEventListener('click', async (e) => {
   }
 });
 
-proposalGeneratorForm?.addEventListener('submit', (e) => {
-  e.preventDefault();
-  if (!proposalGeneratorForm.reportValidity()) return;
-
-  const formData = new FormData(proposalGeneratorForm);
-  const draft = buildProposalDraft({
-    senderCompany: String(formData.get('sender_company') || '').trim(),
-    senderName: String(formData.get('sender_name') || '').trim(),
-    senderWebsite: String(formData.get('sender_website') || '').trim(),
-    serviceDescription: String(formData.get('service_description') || '').trim(),
-  });
-
-  if (proposalSubjectOutput) proposalSubjectOutput.value = draft.subject;
-  if (proposalBodyOutput) proposalBodyOutput.value = draft.body;
-  if (proposalGeneratorResult) {
-    proposalGeneratorResult.textContent = getSelectedLeadItems().length
-      ? '提案文を作成しました。選択中の企業数に応じて宛名を調整しています。'
-      : '提案文を作成しました。企業未選択のため汎用文面として生成しています。';
-  }
-  showToast('提案文を作成しました', 'success');
-});
-
-copyProposalSubjectBtn?.addEventListener('click', async () => {
-  const subject = String(proposalSubjectOutput?.value || '').trim();
-  if (!subject) {
-    if (proposalGeneratorResult) proposalGeneratorResult.textContent = '先に提案文を作成してください。';
-    showToast('件名がまだありません', 'error');
-    return;
-  }
-
-  try {
-    await copyTextToClipboard(subject);
-    if (proposalGeneratorResult) proposalGeneratorResult.textContent = '件名をコピーしました。';
-    showToast('件名をコピーしました', 'success');
-  } catch (_err) {
-    if (proposalGeneratorResult) proposalGeneratorResult.textContent = '件名のコピーに失敗しました。';
-    showToast('件名のコピーに失敗しました', 'error');
-  }
-});
+proposalGeneratorForm?.addEventListener('input', updateProposalPreview);
 
 copyProposalBodyBtn?.addEventListener('click', async () => {
-  const body = String(proposalBodyOutput?.value || '').trim();
+  const body = String(proposalPreviewText?.textContent || '').trim();
   if (!body) {
-    if (proposalGeneratorResult) proposalGeneratorResult.textContent = '先に提案文を作成してください。';
+    if (proposalGeneratorResult) proposalGeneratorResult.textContent = '必要事項を入力して提案文を生成してください。';
     showToast('本文がまだありません', 'error');
     return;
   }
@@ -1950,12 +1988,14 @@ leadSelectAll?.addEventListener('change', (e) => {
     el.checked = checked;
   });
   updateProposalTargetSummary();
+  updateProposalPreview();
 });
 
 leadsTbody?.addEventListener('change', (e) => {
   const target = e.target;
   if (!(target instanceof HTMLInputElement) || !target.classList.contains('lead-check')) return;
   updateProposalTargetSummary();
+  updateProposalPreview();
 });
 
 exportCsvBtn?.addEventListener('click', exportSelectedLeadsAsCsv);
@@ -1982,3 +2022,4 @@ fetchAdapters();
 fetchSuppressions();
 fetchAuditLogs();
 updateProposalTargetSummary();
+updateProposalPreview();
