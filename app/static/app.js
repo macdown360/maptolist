@@ -65,9 +65,7 @@ const myListDefaultStatus = document.querySelector('#my-list-default-status');
 const myListDefaultPriority = document.querySelector('#my-list-default-priority');
 const proposalGeneratorForm = document.querySelector('#proposal-generator-form');
 const proposalTargetSummary = document.querySelector('#proposal-target-summary');
-const proposalPreviewText = document.querySelector('#proposal-preview-text');
 const proposalGeneratorResult = document.querySelector('#proposal-generator-result');
-const copyProposalBodyBtn = document.querySelector('#copy-proposal-body-btn');
 
 let currentItems = [];
 let myListItems = [];
@@ -894,113 +892,23 @@ function normalizeProposalParagraphs(text) {
     .filter(Boolean);
 }
 
-function fitParagraphsToLength(paragraphs, maxLength) {
-  const normalizedMaxLength = Math.max(40, Number(maxLength) || 0);
-  const output = [];
-  let consumed = 0;
-
-  for (const paragraph of paragraphs) {
-    if (consumed >= normalizedMaxLength) break;
-    const remaining = normalizedMaxLength - consumed;
-    if (paragraph.length <= remaining) {
-      output.push(paragraph);
-      consumed += paragraph.length + 2;
-      continue;
-    }
-
-    if (remaining > 8) {
-      output.push(`${paragraph.slice(0, remaining - 1).trim()}…`);
-    }
-    break;
-  }
-
-  return output.length ? output : ['詳細は個別にご案内いたします。'];
-}
-
-function buildProposalDraft({ senderCompany, senderName, senderWebsite, serviceDescription, targetLength }, selectedItems = getSelectedLeadItems()) {
-  const targetName = selectedItems.length === 1 ? String(selectedItems[0].name || '').trim() : '';
-  const greeting = targetName ? `${targetName} ご担当者様` : 'ご担当者様';
-  const referenceLine = targetName
-    ? `${targetName}様の事業内容を拝見し、お役に立てる可能性があると感じてご連絡いたしました。`
-    : '貴社の取り組みに対して、お役に立てる可能性があると感じてご連絡いたしました。';
-  const target = Math.min(800, Math.max(120, Number(targetLength) || 280));
-  const templateBase = [
-    greeting,
-    '',
-    '突然のご連絡失礼いたします。',
-    `${senderCompany}の${senderName}と申します。`,
-    '',
-    'ご提案内容は以下の通りです。',
-    '',
-    referenceLine,
-    '',
-    'ご関心があれば、詳細資料や活用イメージをご案内いたします。',
-    'ご返信いただけますと幸いです。',
-    '',
-    '何卒よろしくお願いいたします。',
-    '',
-    senderCompany,
-    senderName,
-    senderWebsite,
-  ];
-  const baseLength = templateBase.join('\n').length;
-  const paragraphs = normalizeProposalParagraphs(serviceDescription);
-  const paragraphBudget = Math.max(60, target - baseLength);
-  const fittedParagraphs = fitParagraphsToLength(paragraphs, paragraphBudget);
-  const body = [
-    greeting,
-    '',
-    '突然のご連絡失礼いたします。',
-    `${senderCompany}の${senderName}と申します。`,
-    '',
-    'ご提案内容は以下の通りです。',
-    '',
-    ...fittedParagraphs.flatMap((paragraph) => [paragraph, '']),
-    referenceLine,
-    '',
-    'ご関心があれば、詳細資料や活用イメージをご案内いたします。',
-    'ご返信いただけますと幸いです。',
-    '',
-    '何卒よろしくお願いいたします。',
-    '',
-    senderCompany,
-    senderName,
-    senderWebsite,
-  ].join('\n').trim();
-
-  return {
-    body,
-    currentLength: body.length,
-    targetLength: target,
-  };
-}
-
 function updateProposalPreview() {
-  if (!proposalGeneratorForm || !proposalPreviewText || !proposalGeneratorResult) return;
+  if (!proposalGeneratorForm || !proposalGeneratorResult) return;
 
   const formData = new FormData(proposalGeneratorForm);
   const senderCompany = String(formData.get('sender_company') || '').trim();
   const senderName = String(formData.get('sender_name') || '').trim();
   const senderWebsite = String(formData.get('sender_website') || '').trim();
   const serviceDescription = String(formData.get('service_description') || '').trim();
-  const targetLength = Number(formData.get('target_length') || 280);
+  const targetLength = Math.min(800, Math.max(120, Number(formData.get('target_length') || 280)));
+  const paragraphs = normalizeProposalParagraphs(serviceDescription);
 
   if (!senderCompany || !senderName || !senderWebsite || !serviceDescription) {
-    proposalPreviewText.textContent = '入力内容に応じてここへ自動表示されます。';
     proposalGeneratorResult.textContent = '必要事項を入力すると自動で提案文を更新します。';
     return;
   }
 
-  const draft = buildProposalDraft({
-    senderCompany,
-    senderName,
-    senderWebsite,
-    serviceDescription,
-    targetLength,
-  });
-
-  proposalPreviewText.textContent = draft.body;
-  proposalGeneratorResult.textContent = `提案文を自動更新しました。現在 ${draft.currentLength} 文字 / 目安 ${draft.targetLength} 文字です。`;
+  proposalGeneratorResult.textContent = `入力確認: 提案者情報を入力済み / サービス内容 ${paragraphs.length} 段落 / 目安 ${targetLength} 文字`;
 }
 
 function exportRowsFromLeadItems(items) {
@@ -1799,24 +1707,6 @@ historyTimeline?.addEventListener('click', async (e) => {
 });
 
 proposalGeneratorForm?.addEventListener('input', updateProposalPreview);
-
-copyProposalBodyBtn?.addEventListener('click', async () => {
-  const body = String(proposalPreviewText?.textContent || '').trim();
-  if (!body) {
-    if (proposalGeneratorResult) proposalGeneratorResult.textContent = '必要事項を入力して提案文を生成してください。';
-    showToast('本文がまだありません', 'error');
-    return;
-  }
-
-  try {
-    await copyTextToClipboard(body);
-    if (proposalGeneratorResult) proposalGeneratorResult.textContent = '本文をコピーしました。';
-    showToast('本文をコピーしました', 'success');
-  } catch (_err) {
-    if (proposalGeneratorResult) proposalGeneratorResult.textContent = '本文のコピーに失敗しました。';
-    showToast('本文のコピーに失敗しました', 'error');
-  }
-});
 
 contactFormsTbody?.addEventListener('click', (e) => {
   const target = e.target;
