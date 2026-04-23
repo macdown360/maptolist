@@ -33,10 +33,6 @@ from app.db import get_connection
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 EMAIL_REGEX = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-OBFUSCATED_EMAIL_REGEX = re.compile(
-    r"[A-Za-z0-9._%+-]+\s*(?:\[at\]|\(at\)|\s+at\s+|\[＠\]|【at】)\s*[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
-    re.IGNORECASE,
-)
 POSTAL_CODE_REGEX = re.compile(r"〒?\s*(\d{3})[-ー]?\s*(\d{4})")
 COUNTRY_PREFIX_REGEX = re.compile(r"^(?:日本|Japan)[、,\s　]*", re.IGNORECASE)
 PREFECTURE_REGEX = re.compile(
@@ -1060,7 +1056,6 @@ class ContactFormHTMLParser(HTMLParser):
         self.form_hints: list[str] = []
         self.text_parts: list[str] = []
         self.title_parts: list[str] = []
-        self.mailto_emails: list[str] = []
         self._current_href = ""
         self._current_link_text: list[str] = []
         self._in_title = False
@@ -1071,11 +1066,6 @@ class ContactFormHTMLParser(HTMLParser):
         if normalized_tag == "a":
             self._current_href = attr_map.get("href", "")
             self._current_link_text = []
-            mailto_href = self._current_href
-            if mailto_href.lower().startswith("mailto:"):
-                raw = mailto_href[7:].split("?")[0].strip()
-                if EMAIL_REGEX.fullmatch(raw):
-                    self.mailto_emails.append(raw)
         elif normalized_tag == "form":
             self.form_count += 1
             for key in ("action", "id", "class", "name"):
@@ -1151,19 +1141,6 @@ def is_safe_public_url(url: str) -> bool:
 def _contains_any_hint(text: str, hints: tuple[str, ...]) -> bool:
     lowered = str(text or "").lower()
     return any(h.lower() in lowered for h in hints)
-
-
-def _email_matches_domain(email: str, base_url: str) -> bool:
-    """メールアドレスのドメインがサイトのドメインと一致するか確認する。
-    サブドメインも許容する（例: info@mail.example.com は example.com と一致）。"""
-    try:
-        email_domain = email.split("@", 1)[1].lower().strip()
-        site_domain = urlparse(base_url).netloc.lower().strip()
-        # www. などのサブドメインを除いたルートドメインで比較
-        site_root = ".".join(site_domain.split(".")[-2:]) if site_domain.count(".") >= 1 else site_domain
-        return email_domain == site_root or email_domain.endswith("." + site_root)
-    except Exception:  # noqa: BLE001
-        return False
 
 
 def extract_candidate_contact_urls(base_url: str, html: str) -> list[str]:
@@ -1253,22 +1230,15 @@ async def fetch_html_page(client: httpx.AsyncClient, url: str) -> tuple[str, str
 async def discover_contact_form_info(client: httpx.AsyncClient, website: str) -> dict[str, Any]:
     base_url = normalize_website_url(website)
     if not base_url:
-        return {"form_url": "", "email": "", "source": "heuristic_crawl", "confidence": 0.0, "title": ""}
+        return {"form_url": "", "source": "heuristic_crawl", "confidence": 0.0, "title": ""}
 
     home_html, resolved_base = await fetch_html_page(client, base_url)
     if not home_html:
-        return {"form_url": "", "email": "", "source": "heuristic_crawl", "confidence": 0.0, "title": ""}
+        return {"form_url": "", "source": "heuristic_crawl", "confidence": 0.0, "title": ""}
 
     candidates = extract_candidate_contact_urls(resolved_base, home_html)
     best: dict[str, Any] = {"url": "", "score": 0, "title": ""}
-    discovered_email = ""
     visited: set[str] = set()
-
-    def _is_valid_email_for_site(email: str) -> bool:
-        lowered = email.lower()
-        if lowered.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
-            return False
-        return _email_matches_domain(email, resolved_base)
 
     for candidate in candidates:
         if candidate in visited:
@@ -1278,38 +1248,6 @@ async def discover_contact_form_info(client: httpx.AsyncClient, website: str) ->
         if not html:
             continue
 
-        if not discovered_email:
-            # 1. mailto: リンクから直接抽出（最優先・最も信頼度が高い）
-            page_parser = ContactFormHTMLParser()
-            page_parser.feed(str(html or "")[:300000])
-            for mailto_email in page_parser.mailto_emails:
-                if _is_valid_email_for_site(mailto_email):
-                    discovered_email = mailto_email
-                    break
-
-        if not discovered_email:
-            # 2. HTML全体を正規表現でスキャン
-            matches = EMAIL_REGEX.findall(html)
-            for matched in matches:
-                email = str(matched or "").strip()
-                if email and _is_valid_email_for_site(email):
-                    discovered_email = email
-                    break
-
-        if not discovered_email:
-            # 3. 難読化メール（例: user [at] domain.com）を検索
-            obf_matches = OBFUSCATED_EMAIL_REGEX.findall(html)
-            for obf in obf_matches:
-                normalized = re.sub(
-                    r"\s*(?:\[at\]|\(at\)|\s+at\s+|\[＠\]|【at】)\s*",
-                    "@",
-                    obf,
-                    flags=re.IGNORECASE,
-                ).strip()
-                if EMAIL_REGEX.fullmatch(normalized) and _is_valid_email_for_site(normalized):
-                    discovered_email = normalized
-                    break
-
         analysis = analyze_contact_page(final_url, html)
         if analysis["score"] > best["score"]:
             best = analysis
@@ -1317,7 +1255,6 @@ async def discover_contact_form_info(client: httpx.AsyncClient, website: str) ->
     if not best.get("has_contact_form"):
         return {
             "form_url": "",
-            "email": discovered_email,
             "source": "heuristic_crawl",
             "confidence": 0.0,
             "title": "",
@@ -1326,7 +1263,6 @@ async def discover_contact_form_info(client: httpx.AsyncClient, website: str) ->
     confidence = min(0.99, max(0.5, float(best["score"]) / 20.0))
     return {
         "form_url": str(best.get("url", "")),
-        "email": discovered_email,
         "source": "heuristic_crawl",
         "confidence": confidence,
         "title": str(best.get("title", "")),
@@ -2023,13 +1959,12 @@ def list_contact_forms(request: Request, user: CurrentUser) -> dict[str, Any]:
                 l.name AS lead_name,
                 d.website,
                 d.form_url,
-                d.email,
                 d.source,
                 d.confidence,
                 d.checked_at
             FROM contact_form_discoveries d
             JOIN leads l ON l.id = d.lead_id
-            WHERE d.user_id = ? AND COALESCE(d.browser_client_id, '') = ? AND (d.form_url <> '' OR d.email <> '')
+            WHERE d.user_id = ? AND COALESCE(d.browser_client_id, '') = ? AND d.form_url <> ''
             ORDER BY d.checked_at DESC, l.name ASC
             """,
             (user["id"], browser_client_id),
@@ -2063,15 +1998,13 @@ async def discover_contact_forms(request: Request, payload: LeadSelectionRequest
         async with semaphore:
             info = await discover_contact_form_info(client, website)
         form_url = str(info.get("form_url", "")).strip()
-        email = str(info.get("email", "")).strip()
-        if not form_url and not email:
+        if not form_url:
             return None
         return {
             "lead_id": int(lead["id"]),
             "lead_name": str(lead.get("name", "")),
             "website": website,
             "form_url": form_url,
-            "email": email,
             "source": str(info.get("source", "heuristic_crawl")),
             "confidence": float(info.get("confidence", 0.0)),
             "checked_at": now_iso(),
@@ -2102,7 +2035,7 @@ async def discover_contact_forms(request: Request, payload: LeadSelectionRequest
                 ON CONFLICT(user_id, lead_id) DO UPDATE SET
                     website=excluded.website,
                     form_url=excluded.form_url,
-                    email=excluded.email,
+                    email='',
                     browser_client_id=excluded.browser_client_id,
                     source=excluded.source,
                     confidence=excluded.confidence,
@@ -2114,7 +2047,7 @@ async def discover_contact_forms(request: Request, payload: LeadSelectionRequest
                     item["lead_id"],
                     item["website"],
                     item["form_url"],
-                    item["email"],
+                    "",
                     browser_client_id,
                     item["source"],
                     item["confidence"],

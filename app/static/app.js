@@ -808,36 +808,12 @@ function formatUrlLabel(value) {
   }
 }
 
-function isValidEmailValue(value) {
-  const text = String(value || '').trim();
-  if (!text) return false;
-  return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(text);
-}
-
-function looksLikeIsoDateValue(value) {
-  const text = String(value || '').trim();
-  if (!text) return false;
-  return /^\d{4}-\d{2}-\d{2}(?:[T\s].*)?$/.test(text);
-}
-
 function normalizeContactDiscoveryItem(item) {
   const src = item || {};
-  const emailRaw = String(src.email || '').trim();
   const checkedAtRaw = String(src.checked_at || '').trim();
-
-  if (isValidEmailValue(emailRaw)) {
-    return {
-      ...src,
-      email: emailRaw,
-      checked_at: checkedAtRaw,
-    };
-  }
-
-  const fallbackCheckedAt = !checkedAtRaw && looksLikeIsoDateValue(emailRaw) ? emailRaw : checkedAtRaw;
   return {
     ...src,
-    email: '',
-    checked_at: fallbackCheckedAt,
+    checked_at: checkedAtRaw,
   };
 }
 
@@ -846,7 +822,7 @@ function hydrateContactFormsState() {
   if (!items.length) return;
   renderContactFormsTable(items);
   if (contactFormsResult) {
-    contactFormsResult.textContent = `${items.length}件の問い合わせフォーム・メールアドレス情報を保持中`;
+    contactFormsResult.textContent = `${items.length}件の問い合わせフォーム情報を保持中`;
   }
 }
 
@@ -855,7 +831,7 @@ function renderContactFormsTable(items) {
   if (!Array.isArray(items) || !items.length) {
     contactFormsTbody.innerHTML = `
       <tr>
-        <td colspan="5" class="muted">まだ問い合わせフォームURL・メールアドレスはありません。取得結果一覧で企業を選択して探索してください。</td>
+        <td colspan="4" class="muted">まだ問い合わせフォームURLはありません。取得結果一覧で企業を選択して探索してください。</td>
       </tr>
     `;
     return;
@@ -873,9 +849,6 @@ function renderContactFormsTable(items) {
           </td>
           <td>
             ${item.form_url ? `<a class="table-link form-link open-form-link" href="${escapeHtml(item.form_url)}" data-form-url="${escapeHtml(item.form_url)}" data-lead-name="${escapeHtml(item.lead_name || '')}" data-website="${escapeHtml(item.website || '')}" target="_blank" rel="noopener noreferrer">フォームを開く</a><div class="mini-url">${escapeHtml(formatUrlLabel(item.form_url))}</div>` : '<span class="muted">-</span>'}
-          </td>
-          <td>
-            ${item.email ? `<a class="table-link" href="mailto:${escapeHtml(item.email)}">${escapeHtml(item.email)}</a>` : '<span class="muted">-</span>'}
           </td>
           <td class="date-cell">${escapeHtml(formatDateOnly(item.checked_at || ''))}</td>
         </tr>
@@ -1346,10 +1319,10 @@ async function fetchContactForms() {
     const cachedItems = getStoredContactFormItems();
     if (cachedItems.length) {
       renderContactFormsTable(cachedItems);
-      if (contactFormsResult) contactFormsResult.textContent = `${cachedItems.length}件の問い合わせフォーム・メールアドレス情報を保持中`;
+      if (contactFormsResult) contactFormsResult.textContent = `${cachedItems.length}件の問い合わせフォーム情報を保持中`;
       return;
     }
-    if (contactFormsResult) contactFormsResult.textContent = '問い合わせフォーム・メールアドレス情報を取得できませんでした';
+    if (contactFormsResult) contactFormsResult.textContent = '問い合わせフォーム情報を取得できませんでした';
     return;
   }
 
@@ -1357,7 +1330,7 @@ async function fetchContactForms() {
     const cachedItems = getStoredContactFormItems();
     if (cachedItems.length) {
       renderContactFormsTable(cachedItems);
-      if (contactFormsResult) contactFormsResult.textContent = `${cachedItems.length}件の問い合わせフォーム・メールアドレス情報を保持中`;
+      if (contactFormsResult) contactFormsResult.textContent = `${cachedItems.length}件の問い合わせフォーム情報を保持中`;
       return;
     }
     if (contactFormsResult) contactFormsResult.textContent = `エラー: ${data.detail || '取得失敗'}`;
@@ -1368,7 +1341,7 @@ async function fetchContactForms() {
   const items = mergeContactFormItems([], serverItems).map(normalizeContactDiscoveryItem);
   renderContactFormsTable(items);
   persistContactFormsState(items);
-  if (contactFormsResult) contactFormsResult.textContent = `${items.length}件の問い合わせフォーム・メールアドレス情報を表示中`;
+  if (contactFormsResult) contactFormsResult.textContent = `${items.length}件の問い合わせフォーム情報を表示中`;
 }
 
 async function discoverSelectedContactForms() {
@@ -1380,7 +1353,7 @@ async function discoverSelectedContactForms() {
     return;
   }
 
-  setBusyStatusWithCat(exportResult, '問い合わせフォーム・メールアドレスを探索中...');
+  setBusyStatusWithCat(exportResult, '問い合わせフォームを探索中...');
 
   const res = await apiFetch('/api/contact-forms/discover', {
     method: 'POST',
@@ -1392,7 +1365,7 @@ async function discoverSelectedContactForms() {
 
   if (!res.ok) {
     if (exportResult) exportResult.textContent = `エラー: ${data.detail || '探索失敗'}`;
-    showToast('問い合わせフォーム・メールアドレス探索に失敗しました', 'error');
+    showToast('問い合わせフォーム探索に失敗しました', 'error');
     return;
   }
 
@@ -1402,8 +1375,8 @@ async function discoverSelectedContactForms() {
 
   const msg = `探索完了: ${data.found}件 / 対象${data.checked}件`;
   if (exportResult) exportResult.textContent = msg;
-  addActivity(`問い合わせフォーム・メールアドレス探索: ${data.found}件見つかりました`, 'user');
-  showToast(data.found ? '問い合わせフォーム・メールアドレス情報を取得しました' : '問い合わせフォーム・メールアドレス情報は見つかりませんでした', data.found ? 'success' : 'info');
+  addActivity(`問い合わせフォーム探索: ${data.found}件見つかりました`, 'user');
+  showToast(data.found ? '問い合わせフォーム情報を取得しました' : '問い合わせフォーム情報は見つかりませんでした', data.found ? 'success' : 'info');
   switchView('contact-forms');
   await fetchContactForms();
 }

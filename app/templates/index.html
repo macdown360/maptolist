@@ -30,7 +30,7 @@
       <nav class="menu" id="view-menu">
         <button class="menu-item active" data-view="import">データ取得</button>
         <button class="menu-item" data-view="leads">取得結果一覧</button>
-        <button class="menu-item" data-view="contact-forms">問い合わせフォーム・メールアドレス</button>
+        <button class="menu-item" data-view="contact-forms">問い合わせフォーム</button>
       </nav>
     </aside>
 
@@ -64,7 +64,7 @@
           <div class="export-tools">
             <button type="button" id="export-csv-btn" class="ghost">CSV出力</button>
             <button type="button" id="export-excel-btn" class="ghost">Excel出力</button>
-            <button type="button" id="discover-contact-forms-btn" class="ghost">問い合わせフォーム・メールアドレス探索</button>
+            <button type="button" id="discover-contact-forms-btn" class="ghost">問い合わせフォーム探索</button>
             <p id="export-result" class="muted"></p>
           </div>
           <div class="table-wrap">
@@ -177,8 +177,8 @@
 
       <section class="view" id="view-contact-forms">
         <div class="panel">
-          <h3>問い合わせフォーム・メールアドレス一覧</h3>
-          <p class="muted">取得結果一覧で選択した企業のWebサイト内から、問い合わせフォームURLとメールアドレスを探索した結果を表示します。フォームとメールの両方が見つかった場合は両方表示し、片方だけの場合は見つかった情報のみ表示します。どちらも見つからない場合は一覧に追加しません。</p>
+          <h3>問い合わせフォーム一覧</h3>
+          <p class="muted">取得結果一覧で選択した企業のWebサイト内から、問い合わせフォームURLを探索した結果を表示します。問い合わせフォームが見つからない場合は一覧に追加しません。</p>
           <p id="contact-forms-result" class="muted"></p>
           <div class="table-wrap">
             <table id="contact-forms-table">
@@ -187,13 +187,12 @@
                   <th>企業・団体名</th>
                   <th>Webサイト</th>
                   <th>問い合わせフォームURL</th>
-                  <th>メールアドレス</th>
                   <th>確認日</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td colspan="5" class="muted">まだ問い合わせフォームURL・メールアドレスはありません。</td>
+                  <td colspan="4" class="muted">まだ問い合わせフォームURLはありません。</td>
                 </tr>
               </tbody>
             </table>
