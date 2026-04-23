@@ -514,6 +514,53 @@ td {
   width: 100px;
 }
 
+.proposal-builder {
+  margin: 18px 0 14px;
+  padding: 16px;
+  border: 1px solid #d9e4f3;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f8fbff, #f3f8ff);
+}
+
+.proposal-builder-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+
+.proposal-builder-head h4 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.proposal-builder-head .muted {
+  margin: 0;
+}
+
+.proposal-service-field {
+  grid-column: 1 / -1;
+}
+
+.proposal-preview {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.proposal-preview textarea,
+.proposal-preview input {
+  background: #fff;
+}
+
+.proposal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 #contact-forms-table {
   min-width: 760px;
   table-layout: auto;
@@ -894,6 +941,10 @@ th {
 }
 
 @media (max-width: 980px) {
+  .proposal-builder-head {
+    flex-direction: column;
+  }
+
   .app-shell {
     grid-template-columns: 1fr;
   }

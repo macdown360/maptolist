@@ -63,6 +63,13 @@ const myListRemoveBtn = document.querySelector('#my-list-remove-btn');
 
 const myListDefaultStatus = document.querySelector('#my-list-default-status');
 const myListDefaultPriority = document.querySelector('#my-list-default-priority');
+const proposalGeneratorForm = document.querySelector('#proposal-generator-form');
+const proposalTargetSummary = document.querySelector('#proposal-target-summary');
+const proposalSubjectOutput = document.querySelector('#proposal-subject');
+const proposalBodyOutput = document.querySelector('#proposal-body');
+const proposalGeneratorResult = document.querySelector('#proposal-generator-result');
+const copyProposalSubjectBtn = document.querySelector('#copy-proposal-subject-btn');
+const copyProposalBodyBtn = document.querySelector('#copy-proposal-body-btn');
 
 let currentItems = [];
 let myListItems = [];
@@ -869,6 +876,57 @@ function getSelectedLeadItems() {
   return currentItems.filter((item) => selected.has(Number(item.id)));
 }
 
+function buildProposalTargetSummary(items = getSelectedLeadItems()) {
+  if (!items.length) return '取得結果一覧で選択した企業がある場合は、冒頭の宛名に反映します。';
+  if (items.length === 1) {
+    return `選択中の企業: ${items[0].name || '名称未設定'} 向けに文面を調整します。`;
+  }
+  return `選択中の企業: ${items.length}社。複数社向けの汎用文面として生成します。`;
+}
+
+function updateProposalTargetSummary() {
+  if (!proposalTargetSummary) return;
+  proposalTargetSummary.textContent = buildProposalTargetSummary();
+}
+
+function formatProposalSubject(serviceDescription, senderCompany) {
+  const compactService = String(serviceDescription || '').replace(/\s+/g, ' ').trim();
+  const clippedService = compactService.length > 36 ? `${compactService.slice(0, 36)}...` : compactService;
+  return `【${senderCompany}】${clippedService}のご提案`;
+}
+
+function buildProposalDraft({ senderCompany, senderName, senderWebsite, serviceDescription }, selectedItems = getSelectedLeadItems()) {
+  const targetName = selectedItems.length === 1 ? String(selectedItems[0].name || '').trim() : '';
+  const greeting = targetName ? `${targetName} ご担当者様` : 'ご担当者様';
+  const referenceLine = targetName
+    ? `${targetName}様の事業内容を拝見し、お役に立てる可能性があると感じてご連絡いたしました。`
+    : '貴社の取り組みに対して、お役に立てる可能性があると感じてご連絡いたしました。';
+  const body = [
+    greeting,
+    '',
+    '突然のご連絡失礼いたします。',
+    `${senderCompany}の${senderName}と申します。`,
+    '',
+    `弊社では、${serviceDescription}をご提供しています。`,
+    referenceLine,
+    '',
+    'もしご関心をお持ちいただけましたら、',
+    '詳細資料や活用イメージを簡潔にご案内いたします。',
+    'ご都合のよいタイミングでご返信いただけますと幸いです。',
+    '',
+    '何卒よろしくお願いいたします。',
+    '',
+    senderCompany,
+    senderName,
+    senderWebsite,
+  ].join('\n');
+
+  return {
+    subject: formatProposalSubject(serviceDescription, senderCompany),
+    body,
+  };
+}
+
 function exportRowsFromLeadItems(items) {
   return items.map((item) => ({
     id: item.id,
@@ -1664,6 +1722,64 @@ historyTimeline?.addEventListener('click', async (e) => {
   }
 });
 
+proposalGeneratorForm?.addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (!proposalGeneratorForm.reportValidity()) return;
+
+  const formData = new FormData(proposalGeneratorForm);
+  const draft = buildProposalDraft({
+    senderCompany: String(formData.get('sender_company') || '').trim(),
+    senderName: String(formData.get('sender_name') || '').trim(),
+    senderWebsite: String(formData.get('sender_website') || '').trim(),
+    serviceDescription: String(formData.get('service_description') || '').trim(),
+  });
+
+  if (proposalSubjectOutput) proposalSubjectOutput.value = draft.subject;
+  if (proposalBodyOutput) proposalBodyOutput.value = draft.body;
+  if (proposalGeneratorResult) {
+    proposalGeneratorResult.textContent = getSelectedLeadItems().length
+      ? '提案文を作成しました。選択中の企業数に応じて宛名を調整しています。'
+      : '提案文を作成しました。企業未選択のため汎用文面として生成しています。';
+  }
+  showToast('提案文を作成しました', 'success');
+});
+
+copyProposalSubjectBtn?.addEventListener('click', async () => {
+  const subject = String(proposalSubjectOutput?.value || '').trim();
+  if (!subject) {
+    if (proposalGeneratorResult) proposalGeneratorResult.textContent = '先に提案文を作成してください。';
+    showToast('件名がまだありません', 'error');
+    return;
+  }
+
+  try {
+    await copyTextToClipboard(subject);
+    if (proposalGeneratorResult) proposalGeneratorResult.textContent = '件名をコピーしました。';
+    showToast('件名をコピーしました', 'success');
+  } catch (_err) {
+    if (proposalGeneratorResult) proposalGeneratorResult.textContent = '件名のコピーに失敗しました。';
+    showToast('件名のコピーに失敗しました', 'error');
+  }
+});
+
+copyProposalBodyBtn?.addEventListener('click', async () => {
+  const body = String(proposalBodyOutput?.value || '').trim();
+  if (!body) {
+    if (proposalGeneratorResult) proposalGeneratorResult.textContent = '先に提案文を作成してください。';
+    showToast('本文がまだありません', 'error');
+    return;
+  }
+
+  try {
+    await copyTextToClipboard(body);
+    if (proposalGeneratorResult) proposalGeneratorResult.textContent = '本文をコピーしました。';
+    showToast('本文をコピーしました', 'success');
+  } catch (_err) {
+    if (proposalGeneratorResult) proposalGeneratorResult.textContent = '本文のコピーに失敗しました。';
+    showToast('本文のコピーに失敗しました', 'error');
+  }
+});
+
 contactFormsTbody?.addEventListener('click', (e) => {
   const target = e.target;
   if (!(target instanceof Element)) return;
@@ -1833,6 +1949,13 @@ leadSelectAll?.addEventListener('change', (e) => {
   document.querySelectorAll('.lead-check').forEach((el) => {
     el.checked = checked;
   });
+  updateProposalTargetSummary();
+});
+
+leadsTbody?.addEventListener('change', (e) => {
+  const target = e.target;
+  if (!(target instanceof HTMLInputElement) || !target.classList.contains('lead-check')) return;
+  updateProposalTargetSummary();
 });
 
 exportCsvBtn?.addEventListener('click', exportSelectedLeadsAsCsv);
@@ -1858,3 +1981,4 @@ fetchLeadNameSuggestions();
 fetchAdapters();
 fetchSuppressions();
 fetchAuditLogs();
+updateProposalTargetSummary();

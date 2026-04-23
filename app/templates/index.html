@@ -179,6 +179,31 @@
         <div class="panel">
           <h3>問い合わせフォーム一覧</h3>
           <p class="muted">取得結果一覧で選択した企業のWebサイト内から、問い合わせフォームURLを探索した結果を表示します。問い合わせフォームが見つからない場合は一覧に追加しません。</p>
+          <div class="proposal-builder">
+            <div class="proposal-builder-head">
+              <div>
+                <h4>提案文の自動作成</h4>
+                <p class="muted">問い合わせ前に提案の元情報を入力すると、件名と本文のたたき台を自動生成できます。</p>
+              </div>
+              <p id="proposal-target-summary" class="muted">取得結果一覧で選択した企業がある場合は、冒頭の宛名に反映します。</p>
+            </div>
+            <form id="proposal-generator-form" class="form-grid compact">
+              <label>あなたの社名<input name="sender_company" placeholder="例: 株式会社AutoSales" required /></label>
+              <label>あなたの名前<input name="sender_name" placeholder="例: 山田 太郎" required /></label>
+              <label>あなたのWEBサイト<input name="sender_website" placeholder="例: https://autosales.example.com または autosales.example.com" required /></label>
+              <label class="proposal-service-field">提案したいサービスまたは商品の内容<textarea name="service_description" rows="4" placeholder="例: 整備工場向けの来店予約自動化サービス。電話受付の負担を減らし、予約漏れを防げます。" required></textarea></label>
+              <button type="submit">提案文を作成</button>
+            </form>
+            <div class="proposal-preview">
+              <label>件名<input id="proposal-subject" readonly placeholder="ここに自動生成された件名が表示されます" /></label>
+              <label>本文<textarea id="proposal-body" rows="12" readonly placeholder="ここに自動生成された提案文が表示されます"></textarea></label>
+            </div>
+            <div class="proposal-actions">
+              <button type="button" id="copy-proposal-subject-btn" class="ghost">件名をコピー</button>
+              <button type="button" id="copy-proposal-body-btn" class="ghost">本文をコピー</button>
+            </div>
+            <p id="proposal-generator-result" class="muted">4項目を入力して提案文を作成してください。</p>
+          </div>
           <p id="contact-forms-result" class="muted"></p>
           <div class="table-wrap">
             <table id="contact-forms-table">
