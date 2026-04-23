@@ -846,7 +846,12 @@ function renderContactFormsTable(items) {
     .map(
       (item) => `
         <tr>
-          <td>${escapeHtml(item.lead_name || '名称未設定')}</td>
+          <td>
+            <div class="lead-name-with-action">
+              <span>${escapeHtml(item.lead_name || '名称未設定')}</span>
+              <button type="button" class="ghost generate-proposal-btn" data-lead-name="${escapeHtml(item.lead_name || '')}">提案文生成</button>
+            </div>
+          </td>
           <td>
             ${item.website ? `<a class="table-link" href="${escapeHtml(item.website)}" target="_blank" rel="noopener noreferrer">公式サイトを開く</a><div class="mini-url">${escapeHtml(formatUrlLabel(item.website))}</div>` : '<span class="muted">-</span>'}
           </td>
@@ -1711,6 +1716,16 @@ proposalGeneratorForm?.addEventListener('input', updateProposalPreview);
 contactFormsTbody?.addEventListener('click', (e) => {
   const target = e.target;
   if (!(target instanceof Element)) return;
+
+  const generateBtn = target.closest('.generate-proposal-btn');
+  if (generateBtn) {
+    const leadName = String(generateBtn.dataset.leadName || '').trim();
+    proposalGeneratorForm?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    proposalGeneratorForm?.querySelector('input[name="service_description"]')?.focus();
+    showToast('提案文入力欄へ移動しました', 'info');
+    addActivity(`提案文生成を開始: ${leadName || '名称未設定'}`, 'user');
+    return;
+  }
 
   const link = target.closest('.open-form-link');
   if (!link) return;

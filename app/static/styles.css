@@ -625,6 +625,20 @@ td {
   white-space: nowrap;
 }
 
+.lead-name-with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.generate-proposal-btn {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
 #my-list-table th:nth-child(1),
 #my-list-table td:nth-child(1) {
   width: 36px;
