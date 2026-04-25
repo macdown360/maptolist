@@ -232,7 +232,8 @@ async function apiFetch(url, options = {}) {
   }
 
   if (res.status === 401) {
-    window.location.href = API_BASE_URL ? `${API_BASE_URL}/` : '/';
+    // 未ログイン時はSPAトップ（/）に留まる（API_BASE_URLへのリダイレクト禁止）
+    window.location.href = '/';
     return null;
   }
   return res;
