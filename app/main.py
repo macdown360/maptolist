@@ -1716,7 +1716,7 @@ def get_leads(
                 WHERE COALESCE(mt.category, l.category) <> '' AND l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
                 ORDER BY c
                 """
-            , (user["id"], browser_client_id)).fetchall()
+            , (user_id, browser_client_id)).fetchall()
             industries = conn.execute(
                 """
                 SELECT DISTINCT COALESCE(mt.industry, l.industry) AS i
@@ -1725,7 +1725,7 @@ def get_leads(
                 WHERE COALESCE(mt.industry, l.industry) <> '' AND l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
                 ORDER BY i
                 """
-            , (user["id"], browser_client_id)).fetchall()
+            , (user_id, browser_client_id)).fetchall()
             prefecture_rows = conn.execute(
                 """
                 SELECT DISTINCT TRIM(COALESCE(l.prefecture, '')) AS prefecture
@@ -1733,10 +1733,10 @@ def get_leads(
                 WHERE l.user_id = ? AND COALESCE(l.browser_client_id, '') = ? AND TRIM(COALESCE(l.prefecture, '')) <> ''
                 ORDER BY prefecture
                 """
-            , (user["id"], browser_client_id)).fetchall()
+            , (user_id, browser_client_id)).fetchall()
 
             city_where = ""
-            city_params: list[Any] = [user["id"], browser_client_id]
+            city_params: list[Any] = [user_id, browser_client_id]
             if normalized_prefecture:
                 city_where = " AND TRIM(COALESCE(l.prefecture, '')) = ?"
                 city_params.append(normalized_prefecture)
@@ -1812,7 +1812,7 @@ def get_leads(
                                                 OR TRIM(COALESCE(l.city, '')) = ''
                                             )
                                         """
-                                , (user["id"], browser_client_id)).fetchall()
+                                , (user_id, browser_client_id)).fetchall()
                         else:
                                 option_rows = conn2.execute(
                                         """
@@ -1845,7 +1845,7 @@ def get_leads(
                                                         OR TRIM(COALESCE(l.city, '')) = ''
                                                     )
                                                 """
-                                        , (user["id"], browser_client_id)).fetchall()
+                                        , (user_id, browser_client_id)).fetchall()
                                 else:
                                         option_rows = conn3.execute(
                                                 """
