@@ -561,6 +561,23 @@ td {
   grid-column: 1 / -1;
 }
 
+.proposal-output-tools {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.proposal-result {
+  margin-top: 8px;
+  width: 100%;
+  min-height: 180px;
+  line-height: 1.7;
+  background: #ffffff;
+  resize: vertical;
+}
+
 #contact-forms-table {
   min-width: 760px;
   table-layout: auto;

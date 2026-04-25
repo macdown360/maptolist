@@ -40,6 +40,11 @@ pip install -r requirements.txt
 ```bash
 export GOOGLE_PLACES_API_KEY="your_google_places_api_key"
 
+# 提案文生成（Vertex AI）を有効化する場合
+export VERTEX_AI_PROJECT_ID="your-gcp-project-id"
+export VERTEX_AI_LOCATION="us-central1"
+export VERTEX_AI_MODEL="gemini-2.5-flash"
+
 # メール送信を有効化する場合
 export EMAIL_DRY_RUN="false"
 export FORM_DRY_RUN="true"

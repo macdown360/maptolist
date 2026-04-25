@@ -15,6 +15,8 @@ from urllib.parse import quote_plus, urljoin, urlparse
 import smtplib
 
 import httpx
+from google.auth import default as google_auth_default  # type: ignore[reportMissingImports]
+from google.auth.transport.requests import Request as GoogleAuthRequest  # type: ignore[reportMissingImports]
 from authlib.integrations.starlette_client import OAuth
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -286,6 +288,35 @@ limiter = Limiter(key_func=get_remote_address)
 FETCH_LIMIT_PER_REQUEST: int = int(os.getenv("FETCH_LIMIT_PER_REQUEST", "50"))
 FETCH_LIMIT_DAILY: int = int(os.getenv("FETCH_LIMIT_DAILY", "200"))
 FETCH_LIMIT_MONTHLY: int = int(os.getenv("FETCH_LIMIT_MONTHLY", "1000"))
+VERTEX_AI_PROJECT_ID: str = os.getenv("VERTEX_AI_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT", "")
+VERTEX_AI_LOCATION: str = os.getenv("VERTEX_AI_LOCATION", "us-central1")
+VERTEX_AI_MODEL: str = os.getenv("VERTEX_AI_MODEL", "gemini-2.5-flash")
+PROPOSAL_CONTEXT_HINTS: tuple[str, ...] = (
+    "about",
+    "company",
+    "service",
+    "solution",
+    "product",
+    "business",
+    "works",
+    "case",
+    "news",
+    "採用",
+    "事業",
+    "サービス",
+    "製品",
+    "実績",
+    "導入",
+    "お知らせ",
+)
+PROPOSAL_CONTEXT_PATHS: tuple[str, ...] = (
+    "/about",
+    "/company",
+    "/service",
+    "/services",
+    "/solution",
+    "/products",
+)
 
 app = FastAPI(title="Map to List Lead Collector", version="0.3.0")
 app.state.limiter = limiter
@@ -372,6 +403,15 @@ class MyListUpdateRequest(BaseModel):
 
 class GoogleMapsKeyRequest(BaseModel):
     api_key: str
+
+
+class ProposalGenerationRequest(BaseModel):
+    lead_id: int = Field(..., ge=1)
+    sender_company: str = Field(..., min_length=1, max_length=120)
+    sender_name: str = Field(..., min_length=1, max_length=120)
+    sender_website: str = Field(..., min_length=1, max_length=240)
+    service_description: str = Field(..., min_length=1, max_length=4000)
+    target_length: int = Field(280, ge=120, le=500)
 
 
 @app.on_event("startup")
@@ -1227,6 +1267,206 @@ async def fetch_html_page(client: httpx.AsyncClient, url: str) -> tuple[str, str
     return str(getattr(response, "text", "") or "")[:300000], str(getattr(response, "url", url))
 
 
+def collapse_whitespace(text: str) -> str:
+    return re.sub(r"\s+", " ", str(text or "")).strip()
+
+
+def truncate_text(text: str, max_chars: int) -> str:
+    value = collapse_whitespace(text)
+    if max_chars <= 0:
+        return ""
+    if len(value) <= max_chars:
+        return value
+    return f"{value[: max_chars - 1]}…"
+
+
+def extract_visible_text_from_html(html: str) -> str:
+    sanitized = re.sub(r"<(script|style|noscript)[^>]*>.*?</\\1>", " ", str(html or ""), flags=re.IGNORECASE | re.DOTALL)
+    stripped = re.sub(r"<[^>]+>", " ", sanitized)
+    return collapse_whitespace(stripped)
+
+
+def collect_candidate_profile_urls(base_url: str, home_html: str) -> list[str]:
+    parser = ContactFormHTMLParser()
+    parser.feed(str(home_html or "")[:300000])
+
+    base_domain = urlparse(base_url).netloc.lower()
+    seen: set[str] = {base_url}
+    candidates: list[str] = []
+
+    for path in PROPOSAL_CONTEXT_PATHS:
+        candidate = urljoin(base_url, path)
+        if candidate in seen or not is_safe_public_url(candidate):
+            continue
+        seen.add(candidate)
+        candidates.append(candidate)
+
+    for link in parser.links:
+        href = str(link.get("href", "")).strip()
+        text = str(link.get("text", "")).strip()
+        if not href or href.startswith(("#", "mailto:", "tel:", "javascript:")):
+            continue
+        if not (_contains_any_hint(href, PROPOSAL_CONTEXT_HINTS) or _contains_any_hint(text, PROPOSAL_CONTEXT_HINTS)):
+            continue
+        candidate = urljoin(base_url, href)
+        parsed = urlparse(candidate)
+        if parsed.netloc.lower() != base_domain:
+            continue
+        normalized = f"{parsed.scheme}://{parsed.netloc}{parsed.path or ''}"
+        if normalized in seen or not is_safe_public_url(normalized):
+            continue
+        seen.add(normalized)
+        candidates.append(normalized)
+
+    return candidates[:3]
+
+
+async def gather_company_website_context(client: httpx.AsyncClient, website: str) -> dict[str, Any]:
+    base_url = normalize_website_url(website)
+    if not base_url:
+        return {"summary": "", "sources": []}
+
+    home_html, resolved_base = await fetch_html_page(client, base_url)
+    if not home_html:
+        return {"summary": "", "sources": [base_url]}
+
+    parser = ContactFormHTMLParser()
+    parser.feed(home_html)
+
+    context_parts: list[str] = []
+    context_parts.append(f"ホームページタイトル: {truncate_text(parser.title or '不明', 120)}")
+    home_text = extract_visible_text_from_html(home_html)
+    if home_text:
+        context_parts.append(f"ホームページ要約: {truncate_text(home_text, 1100)}")
+
+    sources: list[str] = [resolved_base]
+    for candidate in collect_candidate_profile_urls(resolved_base, home_html):
+        page_html, final_url = await fetch_html_page(client, candidate)
+        if not page_html:
+            continue
+        page_parser = ContactFormHTMLParser()
+        page_parser.feed(page_html)
+        page_title = truncate_text(page_parser.title or "追加ページ", 120)
+        page_text = truncate_text(extract_visible_text_from_html(page_html), 650)
+        if not page_text:
+            continue
+        context_parts.append(f"{page_title}: {page_text}")
+        sources.append(final_url)
+
+    dedup_sources = list(dict.fromkeys([s for s in sources if s]))
+    summary = "\n".join(context_parts)
+    return {
+        "summary": truncate_text(summary, 2600),
+        "sources": dedup_sources[:4],
+    }
+
+
+def build_vertex_proposal_prompt(
+    lead_name: str,
+    company_website: str,
+    website_context: str,
+    sender_company: str,
+    sender_name: str,
+    sender_website: str,
+    service_description: str,
+    target_length: int,
+) -> str:
+    safe_target = max(120, min(500, int(target_length)))
+    return f"""
+あなたは日本語のB2B営業提案文作成アシスタントです。
+次の情報を使い、問い合わせフォームに送る提案文を1本作成してください。
+
+# 送信先情報
+- 企業・団体名: {lead_name}
+- Webサイト: {company_website}
+
+# 送信先企業の公開情報（Webサイト抽出）
+{website_context or '取得できた情報が少ないため、一般的な課題推定で作成してください。'}
+
+# 提案者情報
+- 社名: {sender_company}
+- 名前: {sender_name}
+- Webサイト: {sender_website}
+
+# 提案したいサービス/商品
+{service_description}
+
+# 出力条件
+- 日本語で作成
+- です・ます調
+- 件名は出力しない（本文のみ）
+- 相手企業の公開情報から推定される課題に触れる
+- 押し売りを避け、丁寧で具体的な提案にする
+- 最後に短いCTA（相談・打ち合わせ提案）を入れる
+- 文字数はおよそ{safe_target}文字（±30文字）
+- 事実不明な内容は断定しない
+""".strip()
+
+
+def get_vertex_access_token() -> str:
+    credentials, _ = google_auth_default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+    credentials.refresh(GoogleAuthRequest())
+    token = str(getattr(credentials, "token", "") or "").strip()
+    if not token:
+        raise RuntimeError("Vertex AIのアクセストークン取得に失敗しました")
+    return token
+
+
+def parse_vertex_proposal_text(payload: dict[str, Any]) -> str:
+    texts: list[str] = []
+    for candidate in payload.get("candidates", []) or []:
+        content = candidate.get("content", {}) or {}
+        for part in content.get("parts", []) or []:
+            text = str(part.get("text", "") or "").strip()
+            if text:
+                texts.append(text)
+    return "\n".join(texts).strip()
+
+
+async def generate_proposal_with_vertex(prompt: str) -> str:
+    if not VERTEX_AI_PROJECT_ID:
+        raise HTTPException(status_code=500, detail="VERTEX_AI_PROJECT_ID または GOOGLE_CLOUD_PROJECT を設定してください")
+
+    try:
+        access_token = await asyncio.to_thread(get_vertex_access_token)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Vertex AI認証に失敗しました: {exc}") from exc
+
+    endpoint = (
+        f"https://{VERTEX_AI_LOCATION}-aiplatform.googleapis.com/v1/"
+        f"projects/{VERTEX_AI_PROJECT_ID}/locations/{VERTEX_AI_LOCATION}/"
+        f"publishers/google/models/{VERTEX_AI_MODEL}:generateContent"
+    )
+    body = {
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.6,
+            "topP": 0.9,
+            "maxOutputTokens": 1024,
+        },
+    }
+
+    async with httpx.AsyncClient(timeout=40) as client:
+        response = await client.post(
+            endpoint,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            },
+            json=body,
+        )
+
+    if response.status_code >= 400:
+        detail = truncate_text(response.text, 500)
+        raise HTTPException(status_code=502, detail=f"Vertex AI APIエラー: {detail}")
+
+    data = response.json()
+    proposal = parse_vertex_proposal_text(data)
+    if not proposal:
+        raise HTTPException(status_code=502, detail="Vertex AIから提案文を取得できませんでした")
+    return proposal
+
+
 async def discover_contact_form_info(client: httpx.AsyncClient, website: str) -> dict[str, Any]:
     base_url = normalize_website_url(website)
     if not base_url:
@@ -1970,6 +2210,95 @@ def list_contact_forms(request: Request, user: CurrentUser) -> dict[str, Any]:
             (user["id"], browser_client_id),
         ).fetchall()
     return {"items": [dict(r) for r in rows], "count": len(rows)}
+
+
+@app.post("/api/proposals/generate")
+async def generate_proposal(request: Request, payload: ProposalGenerationRequest, user: CurrentUser) -> dict[str, Any]:
+    init_db()
+    browser_client_id = get_browser_client_id(request)
+
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                l.id,
+                l.name,
+                l.website AS lead_website,
+                l.category,
+                l.industry,
+                l.address,
+                d.website AS discovered_website,
+                d.form_url
+            FROM leads l
+            LEFT JOIN contact_form_discoveries d
+                ON d.lead_id = l.id
+                AND d.user_id = l.user_id
+                AND COALESCE(d.browser_client_id, '') = COALESCE(l.browser_client_id, '')
+            WHERE l.id = ? AND l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
+            LIMIT 1
+            """,
+            (payload.lead_id, user["id"], browser_client_id),
+        ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="対象企業が見つかりません")
+
+    lead = dict(row)
+    lead_name = str(lead.get("name", "") or "名称未設定")
+    company_website = normalize_website_url(str(lead.get("discovered_website") or lead.get("lead_website") or ""))
+    if not company_website:
+        raise HTTPException(status_code=400, detail="対象企業のWebサイトURLが見つかりません")
+
+    sender_website = normalize_website_url(payload.sender_website) or payload.sender_website.strip()
+    sender_company = payload.sender_company.strip()
+    sender_name = payload.sender_name.strip()
+    service_description = payload.service_description.strip()
+    target_length = max(120, min(500, int(payload.target_length)))
+
+    async with httpx.AsyncClient(timeout=15, headers={"User-Agent": "maptolist-proposal-bot/1.0"}) as client:
+        context = await gather_company_website_context(client, company_website)
+
+    web_context = str(context.get("summary", "") or "").strip()
+    prompt = build_vertex_proposal_prompt(
+        lead_name=lead_name,
+        company_website=company_website,
+        website_context=web_context,
+        sender_company=sender_company,
+        sender_name=sender_name,
+        sender_website=sender_website,
+        service_description=service_description,
+        target_length=target_length,
+    )
+
+    proposal = await generate_proposal_with_vertex(prompt)
+    clipped = truncate_text(proposal, target_length + 40)
+
+    log_audit(
+        "generate_proposal",
+        "lead",
+        str(payload.lead_id),
+        {
+            "lead_name": lead_name,
+            "target_length": target_length,
+            "proposal_length": len(clipped),
+            "vertex_model": VERTEX_AI_MODEL,
+            "website": company_website,
+            "context_sources": context.get("sources", []),
+        },
+        actor=user.get("email", "system"),
+    )
+
+    return {
+        "lead_id": payload.lead_id,
+        "lead_name": lead_name,
+        "website": company_website,
+        "proposal": clipped,
+        "proposal_length": len(clipped),
+        "target_length": target_length,
+        "context_sources": context.get("sources", []),
+        "model": VERTEX_AI_MODEL,
+        "generated_at": now_iso(),
+    }
 
 
 @app.post("/api/contact-forms/discover")

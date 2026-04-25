@@ -66,6 +66,8 @@ const myListDefaultPriority = document.querySelector('#my-list-default-priority'
 const proposalGeneratorForm = document.querySelector('#proposal-generator-form');
 const proposalTargetSummary = document.querySelector('#proposal-target-summary');
 const proposalGeneratorResult = document.querySelector('#proposal-generator-result');
+const copyProposalBtn = document.querySelector('#copy-proposal-btn');
+const proposalCharCount = document.querySelector('#proposal-char-count');
 
 let currentItems = [];
 let myListItems = [];
@@ -77,6 +79,7 @@ let leadFetchController = null;
 let leadFetchRequestSeq = 0;
 let leadFilterAutoSearchTimerId = null;
 const LEAD_FILTER_AUTO_SEARCH_DEBOUNCE_MS = 60;
+let proposalTargetLead = null;
 const MAPS_KEY_STORAGE_KEY = 'maptolist.google_maps_api_key.v2';
 const LEADS_CACHE_STORAGE_KEY = 'maptolist.leads_cache.v2';
 const LEADS_FILTER_STORAGE_KEY = 'maptolist.leads_filter.v2';
@@ -904,7 +907,7 @@ function renderContactFormsTable(items) {
           <td>
             <div class="lead-name-with-action">
               <span>${escapeHtml(item.lead_name || '名称未設定')}</span>
-              <button type="button" class="ghost generate-proposal-btn" data-lead-id="${Number(item.lead_id) || ''}" data-lead-name="${escapeHtml(item.lead_name || '')}">提案文生成</button>
+              <button type="button" class="ghost generate-proposal-btn" data-lead-id="${Number(item.lead_id) || ''}" data-lead-name="${escapeHtml(item.lead_name || '')}" data-website="${escapeHtml(item.website || '')}" data-form-url="${escapeHtml(item.form_url || '')}">提案文生成</button>
             </div>
           </td>
           <td>
@@ -933,6 +936,9 @@ function getSelectedLeadItems() {
 }
 
 function buildProposalTargetSummary(items = getSelectedLeadItems()) {
+  if (proposalTargetLead?.lead_name) {
+    return `提案文生成対象: ${proposalTargetLead.lead_name} / 公式サイト: ${proposalTargetLead.website || '未設定'}`;
+  }
   if (!items.length) return '取得結果一覧で選択した企業がある場合は、冒頭の宛名に反映します。';
   if (items.length === 1) {
     return `選択中の企業: ${items[0].name || '名称未設定'} 向けに文面を調整します。`;
@@ -952,6 +958,99 @@ function normalizeProposalParagraphs(text) {
     .filter(Boolean);
 }
 
+function updateProposalCharCount(text = '') {
+  if (!proposalCharCount) return;
+  proposalCharCount.textContent = `${String(text || '').trim().length}文字`;
+}
+
+function setProposalResultText(text = '') {
+  if (!proposalGeneratorResult) return;
+  proposalGeneratorResult.value = String(text || '').trim();
+  updateProposalCharCount(proposalGeneratorResult.value);
+}
+
+function collectProposalPayload(lead) {
+  if (!proposalGeneratorForm) return null;
+
+  const formData = new FormData(proposalGeneratorForm);
+  const senderCompany = String(formData.get('sender_company') || '').trim();
+  const senderName = String(formData.get('sender_name') || '').trim();
+  const senderWebsite = String(formData.get('sender_website') || '').trim();
+  const serviceDescription = String(formData.get('service_description') || '').trim();
+  const targetLength = Math.min(500, Math.max(120, Number(formData.get('target_length') || 280)));
+
+  if (!senderCompany || !senderName || !senderWebsite || !serviceDescription) {
+    return null;
+  }
+
+  return {
+    lead_id: Number(lead?.lead_id || 0),
+    sender_company: senderCompany,
+    sender_name: senderName,
+    sender_website: senderWebsite,
+    service_description: serviceDescription,
+    target_length: targetLength,
+  };
+}
+
+async function generateProposalForLead(lead, triggerButton = null) {
+  const leadName = String(lead?.lead_name || '').trim();
+  const payload = collectProposalPayload(lead);
+  if (!payload) {
+    showToast('提案者情報とサービス内容を先に入力してください', 'error');
+    setProposalResultText('提案者情報を入力してから、再度「提案文生成」を押してください。');
+    proposalGeneratorForm?.querySelector('input[name="sender_company"]')?.focus();
+    return;
+  }
+
+  proposalTargetLead = {
+    lead_id: payload.lead_id,
+    lead_name: leadName,
+    website: String(lead?.website || '').trim(),
+  };
+  updateProposalTargetSummary();
+
+  if (triggerButton) triggerButton.disabled = true;
+  setProposalResultText('提案文を生成中です。企業サイト情報の分析とVertex AIによる文面生成を実行しています...');
+
+  try {
+    const res = await apiFetch('/api/proposals/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res) return;
+    const data = await res.json();
+
+    if (!res.ok) {
+      const detail = String(data.detail || '提案文生成に失敗しました');
+      setProposalResultText(`エラー: ${detail}`);
+      showToast('提案文生成に失敗しました', 'error');
+      addActivity(`提案文生成失敗: ${detail}`, 'system');
+      return;
+    }
+
+    const proposalText = String(data.proposal || '').trim();
+    if (!proposalText) {
+      setProposalResultText('提案文を生成できませんでした。入力内容を見直して再試行してください。');
+      showToast('提案文を生成できませんでした', 'error');
+      return;
+    }
+
+    setProposalResultText(proposalText);
+    markProposalGeneratedAt(payload.lead_id, leadName);
+    addActivity(`提案文を生成: ${leadName || '名称未設定'} (${proposalText.length}文字)`, 'user');
+    showToast('提案文を生成しました', 'success');
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    setProposalResultText(`エラー: ${reason}`);
+    showToast('提案文生成に失敗しました', 'error');
+    addActivity(`提案文生成失敗: ${reason}`, 'system');
+  } finally {
+    if (triggerButton) triggerButton.disabled = false;
+  }
+}
+
 function updateProposalPreview() {
   if (!proposalGeneratorForm || !proposalGeneratorResult) return;
 
@@ -964,11 +1063,11 @@ function updateProposalPreview() {
   const paragraphs = normalizeProposalParagraphs(serviceDescription);
 
   if (!senderCompany || !senderName || !senderWebsite || !serviceDescription) {
-    proposalGeneratorResult.textContent = '必要事項を入力すると自動で提案文を更新します。';
+    setProposalResultText('必要事項を入力後、問い合わせフォーム一覧の「提案文生成」ボタンを押すと、提案文を生成できます。');
     return;
   }
 
-  proposalGeneratorResult.textContent = `入力確認: 提案者情報を入力済み / サービス内容 ${paragraphs.length} 段落 / 目安 ${targetLength} 文字`;
+  setProposalResultText(`入力確認: 提案者情報を入力済み / サービス内容 ${paragraphs.length} 段落 / 目安 ${targetLength} 文字`);
 }
 
 function exportRowsFromLeadItems(items) {
@@ -1768,7 +1867,24 @@ historyTimeline?.addEventListener('click', async (e) => {
 
 proposalGeneratorForm?.addEventListener('input', updateProposalPreview);
 
-contactFormsTbody?.addEventListener('click', (e) => {
+copyProposalBtn?.addEventListener('click', async () => {
+  const text = String(proposalGeneratorResult?.value || '').trim();
+  if (!text || text.startsWith('入力確認:') || text.startsWith('必要事項を入力')) {
+    showToast('先に提案文を生成してください', 'info');
+    return;
+  }
+  try {
+    await copyTextToClipboard(text);
+    showToast('提案文をコピーしました', 'success');
+    addActivity('提案文をコピーしました', 'user');
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    showToast('コピーに失敗しました', 'error');
+    addActivity(`提案文コピー失敗: ${reason}`, 'system');
+  }
+});
+
+contactFormsTbody?.addEventListener('click', async (e) => {
   const target = e.target;
   if (!(target instanceof Element)) return;
 
@@ -1776,13 +1892,12 @@ contactFormsTbody?.addEventListener('click', (e) => {
   if (generateBtn) {
     const leadName = String(generateBtn.dataset.leadName || '').trim();
     const leadId = Number(generateBtn.dataset.leadId || 0);
-    const updated = markProposalGeneratedAt(leadId, leadName);
+    const website = String(generateBtn.dataset.website || '').trim();
+    const formUrl = String(generateBtn.dataset.formUrl || '').trim();
+
     proposalGeneratorForm?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    proposalGeneratorForm?.querySelector('input[name="service_description"]')?.focus();
-    showToast(updated ? '提案文生成日を更新しました' : '提案文入力欄へ移動しました', 'info');
-    if (!updated) {
-      addActivity(`提案文生成を開始: ${leadName || '名称未設定'}`, 'user');
-    }
+    proposalGeneratorForm?.querySelector('[name="service_description"]')?.focus();
+    await generateProposalForLead({ lead_id: leadId, lead_name: leadName, website, form_url: formUrl }, generateBtn);
     return;
   }
 
