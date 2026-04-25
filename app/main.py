@@ -869,15 +869,12 @@ def set_env_key(key: str, value: str) -> None:
 def get_current_user(request: Request) -> dict[str, Any] | None:
     user_id = request.session.get("user_id")
     if not user_id:
-        if is_auth_disabled():
-            return get_or_create_demo_user()
+        # is_auth_disabled() でもDemo Userを返さず、未ログインはNone
         return None
     with get_connection() as conn:
         row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
     if row:
         return dict(row)
-    if is_auth_disabled():
-        return get_or_create_demo_user()
     return None
 
 
