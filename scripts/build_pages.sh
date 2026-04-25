@@ -18,7 +18,7 @@ sed -i 's|/static/app.js|./app.js|g' "$OUT_DIR/index.html"
 
 # Pages配信時のAPI先を切り替える。
 # リポジトリ変数が未設定の環境でも公開を継続できるよう、既定値を本番URLにしている。
-API_BASE_URL="${PAGES_API_BASE_URL:-https://maptolist.onrender.com}"
+API_BASE_URL="${PAGES_API_BASE_URL:-https://maptolist.online}"
 awk -v api_url="$API_BASE_URL" '
   /<script src="\.\/app\.js"><\/script>/ {
     print "  <script>window.__API_BASE_URL = \"" api_url "\";</script>";

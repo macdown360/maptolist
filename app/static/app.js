@@ -252,9 +252,11 @@ async function loadUserBadge() {
     if (!res || !res.ok) throw new Error('not logged in');
     user = await res.json();
   } catch (e) {
-    // 未ログイン: シンプルなログインボタンのみ
+    // 未ログイン: 小さめ・中央寄せのログインボタンのみ
     sidebarFoot.innerHTML = `
-      <a href="/auth/login" style="display:inline-block;padding:10px 28px;background:#533afd;color:#fff;font-weight:600;border-radius:24px;font-size:16px;text-decoration:none;box-shadow:0 2px 8px #e5e5f7;transition:background 0.15s;">ログイン</a>
+      <div style="display:flex;justify-content:center;align-items:center;padding:16px 0;">
+        <a href="/auth/login" style="display:inline-block;padding:7px 18px;background:#533afd;color:#fff;font-weight:600;border-radius:20px;font-size:14px;text-decoration:none;box-shadow:0 1px 4px #e5e5f7;transition:background 0.15s;">ログイン</a>
+      </div>
     `;
     return;
   }
