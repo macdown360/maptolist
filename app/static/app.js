@@ -238,8 +238,42 @@ async function apiFetch(url, options = {}) {
   return res;
 }
 
+
 async function loadUserBadge() {
-  return undefined;
+  const sidebarFoot = document.getElementById('sidebar-foot');
+  if (!sidebarFoot) return;
+
+  sidebarFoot.innerHTML = '<span style="color:#b0b8c9">ユーザー情報取得中...</span>';
+  let user = null;
+  try {
+    const res = await apiFetch('/api/auth/me');
+    if (!res || !res.ok) throw new Error('not logged in');
+    user = await res.json();
+  } catch (e) {
+    // 未ログイン
+    sidebarFoot.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;justify-content:center;">
+        <span style="font-size:20px;">👤</span>
+        <a href="/auth/login" class="logout-link">ログイン</a>
+      </div>
+    `;
+    return;
+  }
+
+  // ログイン済み
+  sidebarFoot.innerHTML = `
+    <div class="user-card">
+      <img src="${user.picture || '/static/user.svg'}" class="user-avatar" alt="user" />
+      <div class="user-info">
+        <div class="user-name">${escapeHtml(user.name || user.email || 'ユーザー')}</div>
+        <div class="user-email">${escapeHtml(user.email || '')}</div>
+        <div class="gmail-badge ${user.gmail_connected ? 'connected' : 'disconnected'}">
+          Gmail ${user.gmail_connected ? '連携済み' : '未連携'}
+        </div>
+        <a href="/auth/logout" class="logout-link">ログアウト</a>
+      </div>
+    </div>
+  `;
 }
 
 function addActivity(text, who = 'system') {
@@ -291,10 +325,17 @@ function switchView(viewName) {
   if (viewName === 'contact-forms') fetchContactForms();
 }
 
-document.querySelector('#view-menu').addEventListener('click', (e) => {
-  const btn = e.target.closest('.menu-item');
-  if (!btn) return;
-  switchView(btn.dataset.view);
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadUserBadge();
+  const viewMenu = document.querySelector('#view-menu');
+  if (viewMenu) {
+    viewMenu.addEventListener('click', (e) => {
+      const btn = e.target.closest('.menu-item');
+      if (!btn) return;
+      switchView(btn.dataset.view);
+    });
+  }
 });
 
 function escapeHtml(str) {
