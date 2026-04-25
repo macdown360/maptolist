@@ -1415,12 +1415,23 @@ def get_vertex_access_token() -> str:
 
 
 def parse_vertex_proposal_text(payload: dict[str, Any]) -> str:
+    import re
     texts: list[str] = []
     for candidate in payload.get("candidates", []) or []:
         content = candidate.get("content", {}) or {}
         for part in content.get("parts", []) or []:
             text = str(part.get("text", "") or "").strip()
             if text:
+                # \n, \r\n, \\n などを正規の改行に
+                text = re.sub(r"(\\n|\\r\\n|\\r)", "\n", text)
+                # 句点（。）の後に改行（すでに改行があれば2重にならないように）
+                text = re.sub(r"。(?=[^\n])", "。\n", text)
+                # 2つ以上の連続スペースを改行に
+                text = re.sub(r" {2,}", "\n", text)
+                # ピリオド＋スペースの後も改行（英語文対策）
+                text = re.sub(r"\. +", ".\n", text)
+                # 連続改行は1つにまとめる
+                text = re.sub(r"\n{2,}", "\n\n", text)
                 texts.append(text)
     return "\n".join(texts).strip()
 
