@@ -1529,16 +1529,8 @@ async def discover_contact_form_url(client: httpx.AsyncClient, website: str) -> 
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request) -> HTMLResponse:
+    # 未ログイン時もindex.htmlを返し、SPA内でログインUIを制御
     user = get_current_user(request)
-    if not user:
-        return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
-                "oauth_configured": is_google_oauth_configured(),
-                "oauth_error": request.query_params.get("oauth_error", ""),
-            },
-        )
     return templates.TemplateResponse("index.html", {"request": request, "user": user, "app_base_url": APP_BASE_URL})
 
 
