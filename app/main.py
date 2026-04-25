@@ -1442,7 +1442,7 @@ async def generate_proposal_with_vertex(prompt: str) -> str:
         "generationConfig": {
             "temperature": 0.6,
             "topP": 0.9,
-            "maxOutputTokens": 2048,
+            "maxOutputTokens": 4096,
         },
     }
 
