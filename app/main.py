@@ -1619,9 +1619,11 @@ def set_google_maps_key(payload: GoogleMapsKeyRequest, user: CurrentUser) -> dic
 
 
 @app.get("/api/leads")
+from typing import Optional
+
 def get_leads(
     request: Request,
-    user: CurrentUser,
+    user: Optional[dict] = None,
     q: str = Query("", description="会社名や住所で検索"),
     prefecture: str = Query("", description="都道府県フィルタ"),
     city: str = Query("", description="市区町村フィルタ"),
@@ -1631,7 +1633,7 @@ def get_leads(
     sort_dir: str = Query("desc", description="並び順 asc/desc"),
 ) -> dict[str, Any]:
     init_db()
-    adopt_orphan_leads(int(user["id"]))
+    user_id = user["id"] if user else None
     browser_client_id = get_browser_client_id(request)
 
     sql = """
@@ -1644,9 +1646,12 @@ def get_leads(
             COALESCE(mt.industry, l.industry) AS effective_industry
         FROM leads l
         LEFT JOIN manual_tags mt ON mt.lead_id = l.id
-        WHERE l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
+        WHERE 1=1
     """
-    params: list[Any] = [user["id"], browser_client_id]
+    params: list[Any] = []
+    if user_id:
+        sql += " AND l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?"
+        params.extend([user_id, browser_client_id])
 
     normalized_q = q.strip()
     if normalized_q:
@@ -1695,6 +1700,9 @@ def get_leads(
     sql += " ORDER BY " + sort_column.format(dir=normalized_dir.upper())
 
     with get_connection() as conn:
+        # 未ログイン時は最大10件まで
+        if not user_id:
+            sql += " LIMIT 10"
         rows = conn.execute(sql, params).fetchall()
         categories = conn.execute(
             """
@@ -1897,7 +1905,7 @@ def get_lead_names(request: Request, user: CurrentUser, limit: int = Query(300, 
 
 @app.post("/api/import/google-places")
 @limiter.limit(lambda: DEFAULT_RATE_LIMIT_PLACES)
-async def import_google_places(request: Request, payload: ImportRequest, user: CurrentUser) -> dict[str, Any]:
+async def import_google_places(request: Request, payload: ImportRequest, user: Optional[dict] = None) -> dict[str, Any]:
     init_db()
     adopt_orphan_leads(int(user["id"]))
     browser_client_id = get_browser_client_id(request)
@@ -1906,23 +1914,26 @@ async def import_google_places(request: Request, payload: ImportRequest, user: C
         raise HTTPException(status_code=400, detail="Google Places APIキーがサーバーに設定されていません。")
 
     # ---- 取得件数上限チェック ----
-    user_id = int(user["id"])
-    daily_used = get_daily_fetch_usage(user_id)
-    monthly_used = get_monthly_fetch_usage(user_id)
-    daily_remaining = max(0, FETCH_LIMIT_DAILY - daily_used)
-    monthly_remaining = max(0, FETCH_LIMIT_MONTHLY - monthly_used)
-    if daily_remaining == 0:
-        raise HTTPException(
-            status_code=429,
-            detail=f"本日の取得件数上限（{FETCH_LIMIT_DAILY}件）に達しました。明日以降にお試しください。"
-        )
-    if monthly_remaining == 0:
-        raise HTTPException(
-            status_code=429,
-            detail=f"今月の取得件数上限（{FETCH_LIMIT_MONTHLY}件）に達しました。来月以降にお試しください。"
-        )
-    # リクエスト件数を残枠に収める
-    effective_max = min(payload.max_results, daily_remaining, monthly_remaining)
+    user_id = int(user["id"]) if user else None
+    if user_id:
+        daily_used = get_daily_fetch_usage(user_id)
+        monthly_used = get_monthly_fetch_usage(user_id)
+        daily_remaining = max(0, FETCH_LIMIT_DAILY - daily_used)
+        monthly_remaining = max(0, FETCH_LIMIT_MONTHLY - monthly_used)
+        if daily_remaining == 0:
+            raise HTTPException(
+                status_code=429,
+                detail=f"本日の取得件数上限（{FETCH_LIMIT_DAILY}件）に達しました。明日以降にお試しください。"
+            )
+        if monthly_remaining == 0:
+            raise HTTPException(
+                status_code=429,
+                detail=f"今月の取得件数上限（{FETCH_LIMIT_MONTHLY}件）に達しました。来月以降にお試しください。"
+            )
+        effective_max = min(payload.max_results, daily_remaining, monthly_remaining)
+    else:
+        # 未ログイン時は最大10件まで
+        effective_max = min(payload.max_results, 10)
 
     query = payload.query.strip()
     if payload.region.strip():
@@ -1941,7 +1952,8 @@ async def import_google_places(request: Request, payload: ImportRequest, user: C
     )
 
     # 実際に取得した件数を記録
-    record_fetch_usage(user_id, len(items))
+    if user_id:
+        record_fetch_usage(user_id, len(items))
 
     saved = 0
     added = 0
@@ -2218,32 +2230,49 @@ def list_contact_forms(request: Request, user: CurrentUser) -> dict[str, Any]:
 
 
 @app.post("/api/proposals/generate")
-async def generate_proposal(request: Request, payload: ProposalGenerationRequest, user: CurrentUser) -> dict[str, Any]:
+async def generate_proposal(request: Request, payload: ProposalGenerationRequest, user: Optional[dict] = None) -> dict[str, Any]:
     init_db()
     browser_client_id = get_browser_client_id(request)
 
     with get_connection() as conn:
-        row = conn.execute(
-            """
-            SELECT
-                l.id,
-                l.name,
-                l.website AS lead_website,
-                l.category,
-                l.industry,
-                l.address,
-                d.website AS discovered_website,
-                d.form_url
-            FROM leads l
-            LEFT JOIN contact_form_discoveries d
-                ON d.lead_id = l.id
-                AND d.user_id = l.user_id
-                AND COALESCE(d.browser_client_id, '') = COALESCE(l.browser_client_id, '')
-            WHERE l.id = ? AND l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
-            LIMIT 1
-            """,
-            (payload.lead_id, user["id"], browser_client_id),
-        ).fetchone()
+        if user:
+            row = conn.execute(
+                """
+                SELECT
+                    l.id,
+                    l.name,
+                    l.website AS lead_website,
+                    l.category,
+                    l.industry,
+                    l.address,
+                    d.website AS discovered_website,
+                    d.form_url
+                FROM leads l
+                LEFT JOIN contact_form_discoveries d
+                    ON d.lead_id = l.id
+                    AND d.user_id = l.user_id
+                    AND COALESCE(d.browser_client_id, '') = COALESCE(l.browser_client_id, '')
+                WHERE l.id = ? AND l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
+                LIMIT 1
+                """,
+                (payload.lead_id, user["id"], browser_client_id),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                """
+                SELECT
+                    l.id,
+                    l.name,
+                    l.website AS lead_website,
+                    l.category,
+                    l.industry,
+                    l.address
+                FROM leads l
+                WHERE l.id = ?
+                LIMIT 1
+                """,
+                (payload.lead_id,),
+            ).fetchone()
 
     if not row:
         raise HTTPException(status_code=404, detail="対象企業が見つかりません")
