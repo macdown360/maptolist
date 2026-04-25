@@ -1621,7 +1621,6 @@ def set_google_maps_key(payload: GoogleMapsKeyRequest, user: CurrentUser) -> dic
 
 @app.get("/api/leads")
 def get_leads(
-def get_leads(
     request: Request,
     user: Optional[dict] = None,
     q: str = Query("", description="会社名や住所で検索"),
