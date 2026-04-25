@@ -1651,6 +1651,9 @@ def get_leads(
     if user_id:
         sql += " AND l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?"
         params.extend([user_id, browser_client_id])
+    else:
+        sql += " AND COALESCE(l.browser_client_id, '') = ?"
+        params.append(browser_client_id)
 
     normalized_q = q.strip()
     if normalized_q:
@@ -1703,86 +1706,160 @@ def get_leads(
         if not user_id:
             sql += " LIMIT 10"
         rows = conn.execute(sql, params).fetchall()
-        categories = conn.execute(
-            """
-            SELECT DISTINCT COALESCE(mt.category, l.category) AS c
-            FROM leads l
-            LEFT JOIN manual_tags mt ON mt.lead_id = l.id
-            WHERE COALESCE(mt.category, l.category) <> '' AND l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
-            ORDER BY c
-            """
-        , (user["id"], browser_client_id)).fetchall()
-        industries = conn.execute(
-            """
-            SELECT DISTINCT COALESCE(mt.industry, l.industry) AS i
-            FROM leads l
-            LEFT JOIN manual_tags mt ON mt.lead_id = l.id
-            WHERE COALESCE(mt.industry, l.industry) <> '' AND l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
-            ORDER BY i
-            """
-        , (user["id"], browser_client_id)).fetchall()
-        prefecture_rows = conn.execute(
-            """
-            SELECT DISTINCT TRIM(COALESCE(l.prefecture, '')) AS prefecture
-            FROM leads l
-            WHERE l.user_id = ? AND COALESCE(l.browser_client_id, '') = ? AND TRIM(COALESCE(l.prefecture, '')) <> ''
-            ORDER BY prefecture
-            """
-        , (user["id"], browser_client_id)).fetchall()
 
-        city_where = ""
-        city_params: list[Any] = [user["id"], browser_client_id]
-        if normalized_prefecture:
-            city_where = " AND TRIM(COALESCE(l.prefecture, '')) = ?"
-            city_params.append(normalized_prefecture)
+        if user_id:
+            categories = conn.execute(
+                """
+                SELECT DISTINCT COALESCE(mt.category, l.category) AS c
+                FROM leads l
+                LEFT JOIN manual_tags mt ON mt.lead_id = l.id
+                WHERE COALESCE(mt.category, l.category) <> '' AND l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
+                ORDER BY c
+                """
+            , (user["id"], browser_client_id)).fetchall()
+            industries = conn.execute(
+                """
+                SELECT DISTINCT COALESCE(mt.industry, l.industry) AS i
+                FROM leads l
+                LEFT JOIN manual_tags mt ON mt.lead_id = l.id
+                WHERE COALESCE(mt.industry, l.industry) <> '' AND l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
+                ORDER BY i
+                """
+            , (user["id"], browser_client_id)).fetchall()
+            prefecture_rows = conn.execute(
+                """
+                SELECT DISTINCT TRIM(COALESCE(l.prefecture, '')) AS prefecture
+                FROM leads l
+                WHERE l.user_id = ? AND COALESCE(l.browser_client_id, '') = ? AND TRIM(COALESCE(l.prefecture, '')) <> ''
+                ORDER BY prefecture
+                """
+            , (user["id"], browser_client_id)).fetchall()
 
-        city_rows = conn.execute(
-            f"""
-            SELECT DISTINCT TRIM(COALESCE(l.city, '')) AS city
-            FROM leads l
-            WHERE l.user_id = ? AND COALESCE(l.browser_client_id, '') = ? AND TRIM(COALESCE(l.city, '')) <> ''{city_where}
-            ORDER BY city
-            """
-        , tuple(city_params)).fetchall()
+            city_where = ""
+            city_params: list[Any] = [user["id"], browser_client_id]
+            if normalized_prefecture:
+                city_where = " AND TRIM(COALESCE(l.prefecture, '')) = ?"
+                city_params.append(normalized_prefecture)
+
+            city_rows = conn.execute(
+                f"""
+                SELECT DISTINCT TRIM(COALESCE(l.city, '')) AS city
+                FROM leads l
+                WHERE l.user_id = ? AND COALESCE(l.browser_client_id, '') = ? AND TRIM(COALESCE(l.city, '')) <> ''{city_where}
+                ORDER BY city
+                """
+            , tuple(city_params)).fetchall()
+        else:
+            categories = conn.execute(
+                """
+                SELECT DISTINCT COALESCE(mt.category, l.category) AS c
+                FROM leads l
+                LEFT JOIN manual_tags mt ON mt.lead_id = l.id
+                WHERE COALESCE(mt.category, l.category) <> '' AND COALESCE(l.browser_client_id, '') = ?
+                ORDER BY c
+                """
+            , (browser_client_id,)).fetchall()
+            industries = conn.execute(
+                """
+                SELECT DISTINCT COALESCE(mt.industry, l.industry) AS i
+                FROM leads l
+                LEFT JOIN manual_tags mt ON mt.lead_id = l.id
+                WHERE COALESCE(mt.industry, l.industry) <> '' AND COALESCE(l.browser_client_id, '') = ?
+                ORDER BY i
+                """
+            , (browser_client_id,)).fetchall()
+            prefecture_rows = conn.execute(
+                """
+                SELECT DISTINCT TRIM(COALESCE(l.prefecture, '')) AS prefecture
+                FROM leads l
+                WHERE COALESCE(l.browser_client_id, '') = ? AND TRIM(COALESCE(l.prefecture, '')) <> ''
+                ORDER BY prefecture
+                """
+            , (browser_client_id,)).fetchall()
+
+            city_where = ""
+            city_params: list[Any] = [browser_client_id]
+            if normalized_prefecture:
+                city_where = " AND TRIM(COALESCE(l.prefecture, '')) = ?"
+                city_params.append(normalized_prefecture)
+
+            city_rows = conn.execute(
+                f"""
+                SELECT DISTINCT TRIM(COALESCE(l.city, '')) AS city
+                FROM leads l
+                WHERE COALESCE(l.browser_client_id, '') = ? AND TRIM(COALESCE(l.city, '')) <> ''{city_where}
+                ORDER BY city
+                """
+            , tuple(city_params)).fetchall()
 
     # option_rows: 都道府県/市区町村が欠落している行だけフォールバック解析する
     option_rows: list[Any] = []
-    try:
-        with get_connection() as conn2:
-            option_rows = conn2.execute(
-                """
-                SELECT
-                    l.address,
-                    l.prefecture,
-                    l.city,
-                    l.address_components_json
-                FROM leads l
-                WHERE l.user_id = ?
-                  AND COALESCE(l.browser_client_id, '') = ?
-                  AND (
-                    TRIM(COALESCE(l.prefecture, '')) = ''
-                    OR TRIM(COALESCE(l.city, '')) = ''
-                  )
-                """
-            , (user["id"], browser_client_id)).fetchall()
-    except Exception:
-        # address_components_json カラムが存在しない旧DBの場合はフォールバック
         try:
-            with get_connection() as conn3:
-                option_rows = conn3.execute(
-                    """
-                    SELECT l.address, l.prefecture, l.city
-                    FROM leads l
-                    WHERE l.user_id = ?
-                      AND COALESCE(l.browser_client_id, '') = ?
-                      AND (
-                        TRIM(COALESCE(l.prefecture, '')) = ''
-                        OR TRIM(COALESCE(l.city, '')) = ''
-                      )
-                    """
-                , (user["id"], browser_client_id)).fetchall()
+                with get_connection() as conn2:
+                        if user_id:
+                                option_rows = conn2.execute(
+                                        """
+                                        SELECT
+                                                l.address,
+                                                l.prefecture,
+                                                l.city,
+                                                l.address_components_json
+                                        FROM leads l
+                                        WHERE l.user_id = ?
+                                            AND COALESCE(l.browser_client_id, '') = ?
+                                            AND (
+                                                TRIM(COALESCE(l.prefecture, '')) = ''
+                                                OR TRIM(COALESCE(l.city, '')) = ''
+                                            )
+                                        """
+                                , (user["id"], browser_client_id)).fetchall()
+                        else:
+                                option_rows = conn2.execute(
+                                        """
+                                        SELECT
+                                                l.address,
+                                                l.prefecture,
+                                                l.city,
+                                                l.address_components_json
+                                        FROM leads l
+                                        WHERE COALESCE(l.browser_client_id, '') = ?
+                                            AND (
+                                                TRIM(COALESCE(l.prefecture, '')) = ''
+                                                OR TRIM(COALESCE(l.city, '')) = ''
+                                            )
+                                        """
+                                , (browser_client_id,)).fetchall()
         except Exception:
-            option_rows = []
+                # address_components_json カラムが存在しない旧DBの場合はフォールバック
+                try:
+                        with get_connection() as conn3:
+                                if user_id:
+                                        option_rows = conn3.execute(
+                                                """
+                                                SELECT l.address, l.prefecture, l.city
+                                                FROM leads l
+                                                WHERE l.user_id = ?
+                                                    AND COALESCE(l.browser_client_id, '') = ?
+                                                    AND (
+                                                        TRIM(COALESCE(l.prefecture, '')) = ''
+                                                        OR TRIM(COALESCE(l.city, '')) = ''
+                                                    )
+                                                """
+                                        , (user["id"], browser_client_id)).fetchall()
+                                else:
+                                        option_rows = conn3.execute(
+                                                """
+                                                SELECT l.address, l.prefecture, l.city
+                                                FROM leads l
+                                                WHERE COALESCE(l.browser_client_id, '') = ?
+                                                    AND (
+                                                        TRIM(COALESCE(l.prefecture, '')) = ''
+                                                        OR TRIM(COALESCE(l.city, '')) = ''
+                                                    )
+                                                """
+                                        , (browser_client_id,)).fetchall()
+                except Exception:
+                        option_rows = []
 
     prefecture_set: set[str] = {
         re.sub(r"\s+", "", str(r["prefecture"] or "").strip())
