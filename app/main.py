@@ -1,14 +1,6 @@
-# --- SPA fallback: ルートや未定義パスでindex.htmlを返す ---
-from fastapi.responses import FileResponse
+ 
 
-@app.get("/", response_class=FileResponse)
-def root():
-    return FileResponse(str(BASE_DIR / "app" / "templates" / "index.html"))
-
-# すべての未定義パスでindex.htmlを返す（SPA用）
-@app.get("/{full_path:path}", response_class=FileResponse)
-def spa_fallback(full_path: str):
-    return FileResponse(str(BASE_DIR / "app" / "templates" / "index.html"))
+# ...（中略：app = FastAPI(...)の後ろに移動）...
 import asyncio
 import base64
 import ipaddress
