@@ -243,6 +243,7 @@ async function loadUserBadge() {
   const sidebarFoot = document.getElementById('sidebar-foot');
   if (!sidebarFoot) return;
 
+
   sidebarFoot.innerHTML = '<span style="color:#b0b8c9">ユーザー情報取得中...</span>';
   let user = null;
   try {
@@ -250,11 +251,14 @@ async function loadUserBadge() {
     if (!res || !res.ok) throw new Error('not logged in');
     user = await res.json();
   } catch (e) {
-    // 未ログイン
+    // 未ログイン: Gemini風の大きなログインボタンと説明
     sidebarFoot.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;justify-content:center;">
-        <span style="font-size:20px;">👤</span>
-        <a href="/auth/login" class="logout-link">ログイン</a>
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 0 8px;">
+        <div style="font-size: 32px; margin-bottom: 2px;">👤</div>
+        <a href="/auth/login" style="display:inline-block;padding:10px 28px;background:#533afd;color:#fff;font-weight:600;border-radius:24px;font-size:16px;text-decoration:none;box-shadow:0 2px 8px #e5e5f7;transition:background 0.15s;">ログイン</a>
+        <div style="font-size:12px;color:#7a7a9a;margin-top:6px;text-align:center;line-height:1.5;max-width:180px;">
+          Googleアカウントでログインして<br>すべての機能を利用できます
+        </div>
       </div>
     `;
     return;
