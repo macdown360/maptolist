@@ -1,5 +1,6 @@
  
 
+
 # ...（中略：app = FastAPI(...)の後ろに移動）...
 import asyncio
 import base64
@@ -13,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 from email.mime.text import MIMEText
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Optional
 from urllib.parse import quote_plus, urljoin, urlparse
 import smtplib
 
@@ -1619,8 +1620,7 @@ def set_google_maps_key(payload: GoogleMapsKeyRequest, user: CurrentUser) -> dic
 
 
 @app.get("/api/leads")
-from typing import Optional
-
+def get_leads(
 def get_leads(
     request: Request,
     user: Optional[dict] = None,
