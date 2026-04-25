@@ -1012,6 +1012,10 @@ async function generateProposalForLead(lead, triggerButton = null) {
 
   if (triggerButton) triggerButton.disabled = true;
   setProposalResultText('提案文を生成中です。企業サイト情報の分析とVertex AIによる文面生成を実行しています...');
+  const proposalGeneratingStatus = document.getElementById('proposal-generating-status');
+  if (proposalGeneratingStatus) {
+    proposalGeneratingStatus.textContent = '提案文を生成中です。企業サイト情報の分析とVertex AIによる文面生成を実行しています...';
+  }
 
   try {
     const res = await apiFetch('/api/proposals/generate', {
@@ -1041,13 +1045,22 @@ async function generateProposalForLead(lead, triggerButton = null) {
     markProposalGeneratedAt(payload.lead_id, leadName);
     addActivity(`提案文を生成: ${leadName || '名称未設定'} (${proposalText.length}文字)`, 'user');
     showToast('提案文を生成しました', 'success');
+    if (proposalGeneratingStatus) {
+      proposalGeneratingStatus.textContent = '';
+    }
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     setProposalResultText(`エラー: ${reason}`);
     showToast('提案文生成に失敗しました', 'error');
     addActivity(`提案文生成失敗: ${reason}`, 'system');
+    if (proposalGeneratingStatus) {
+      proposalGeneratingStatus.textContent = '';
+    }
   } finally {
     if (triggerButton) triggerButton.disabled = false;
+    if (proposalGeneratingStatus) {
+      proposalGeneratingStatus.textContent = '';
+    }
   }
 }
 
