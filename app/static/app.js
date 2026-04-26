@@ -2146,17 +2146,7 @@ myListSelectAll?.addEventListener('change', (e) => {
   });
 });
 
-hydrateMyListFilterFromUrl();
-hydrateLeadListState();
-hydrateContactFormsState();
-loadUserBadge();
-fetchLeads();
-fetchPlaceTypes();
-fetchMyList();
-fetchContactLogs();
-fetchLeadNameSuggestions();
-fetchAdapters();
-fetchSuppressions();
-fetchAuditLogs();
-updateProposalTargetSummary();
-updateProposalPreview();
+window.addEventListener('DOMContentLoaded', () => {
+});
+
+// 既存の直接呼び出しは削除してください（重複防止のため）
