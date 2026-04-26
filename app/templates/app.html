@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Map to List Workspace</title>
+	<link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+	<link rel="stylesheet" href="/static/styles.css" />
+	<!-- Google tag (gtag.js) -->
+	<script async src="https://www.googletagmanager.com/gtag/js?id=G-5CR2872XQB"></script>
+	<script>
+		window.dataLayer = window.dataLayer || [];
+		function gtag(){dataLayer.push(arguments);}
+		gtag('js', new Date());
+		gtag('config', 'G-5CR2872XQB');
+	</script>
+	<script>
+		// APIベースURLをフロントエンドに設定
+		window.__API_BASE_URL = '{{ app_base_url }}';
+	</script>
+</head>
+<body>
+	<div class="app-shell">
+		<button class="sidebar-toggle" id="sidebar-toggle" aria-label="メニュー切替">☰</button>
+		<aside class="sidebar" id="sidebar">
+			<div class="brand">
+				<h1>Map to List</h1>
+				<p>List generate workspace</p>
+			</div>
+
+			<nav class="menu" id="view-menu">
+				<button class="menu-item active" data-view="import">データ取得</button>
+				<button class="menu-item" data-view="leads">取得結果一覧</button>
+				<button class="menu-item" data-view="contact-forms">問い合わせフォーム</button>
+			</nav>
+			<div class="sidebar-foot" id="sidebar-foot">
+				<!-- ユーザーバッジはJSで描画 -->
+			</div>
+		</aside>
+
+		<main class="workspace">
+			<header class="workspace-head">
+				<h2>リスト作成ワークスペース</h2>
+			</header>
+
+			<section class="view active" id="view-import">
+				<div class="panel">
+					<h3>業種や業界、業態やエリアなどを掛け合わせて検索してください</h3>
+					<form id="import-form" class="form-grid">
+						<label>キーワード<input name="query" required placeholder="例: 税理士 / カフェ / 自動車整備 / 不動産 東京" /></label>
+						<label>地域<input name="region" placeholder="新宿区や沼津市など市区町村単位で指定すると検索時間が短くなります" /></label>
+						<label>取得件数<input type="number" name="max_results" min="1" max="50" value="20" /> <span class="field-note">取得できるデータ件数は1回につき50件まで、1日につき200件まで、1ヶ月につき1,000件までとなります。</span></label>
+						<button type="submit">取得開始</button>
+					</form>
+					<p id="import-result" class="muted"></p>
+				</div>
+			</section>
+
+			<section class="view" id="view-leads">
+				<div class="panel">
+					<h3>取得結果一覧</h3>
+					<form id="filter-form" class="form-grid compact">
+						<label>都道府県<select name="prefecture"><option value="">すべて</option></select></label>
+						<label>市区町村<select name="city"><option value="">すべて</option></select></label>
+						<label>業種<select name="category"><option value="">すべて</option></select></label>
+						<label>業界<select name="industry"><option value="">すべて</option></select></label>
+					</form>
+					<div class="export-tools">
+						<button type="button" id="export-csv-btn" class="ghost">CSV出力</button>
+						<button type="button" id="export-excel-btn" class="ghost">Excel出力</button>
+						<button type="button" id="discover-contact-forms-btn" class="ghost">問い合わせフォーム探索</button>
+						<p id="export-result" class="muted"></p>
+					</div>
+					<div class="table-wrap">
+						<table id="lead-table">
+							<thead>
+								<tr>
+									<th><input type="checkbox" id="select-all" /></th>
+									<th class="sortable" data-sort="address">住所<span class="sort-indicator"></span></th>
+									<th class="sortable" data-sort="prefecture">都道府県<span class="sort-indicator"></span></th>
+									<th class="sortable" data-sort="city">市区町村<span class="sort-indicator"></span></th>
+									<th class="sortable" data-sort="name">企業・団体名<span class="sort-indicator"></span></th>
+									<th class="sortable" data-sort="category">業種<span class="sort-indicator"></span></th>
+									<th class="sortable" data-sort="industry">業界<span class="sort-indicator"></span></th>
+									<th class="sortable" data-sort="rating">評価<span class="sort-indicator"></span></th>
+									<th class="sortable" data-sort="user_ratings_total">評価件数<span class="sort-indicator"></span></th>
+									<th>Web</th>
+									<th>電話</th>
+								</tr>
+							</thead>
+							<tbody></tbody>
+						</table>
+					</div>
+				</div>
+			</section>
+
+			<section class="view" id="view-my-list">
+				<div class="panel">
+					<h3>マイリスト</h3>
+					<p class="muted">取得結果一覧でチェックした企業を追加して、顧客管理・商談管理にご活用ください。</p>
+
+					<div class="status-tabs">
+						<button type="button" class="status-tab active" data-status="">すべて</button>
+						<button type="button" class="status-tab" data-status="new">未対応</button>
+						<button type="button" class="status-tab" data-status="contacted">連絡済み</button>
+						<button type="button" class="status-tab" data-status="nurturing">育成中</button>
+						<button type="button" class="status-tab" data-status="closed">クローズ</button>
+						<button type="button" class="status-tab" data-status="excluded">除外</button>
+					</div>
+
+					<form id="my-list-filter-form" class="form-grid compact">
+						<label>検索<input name="q" placeholder="企業名・住所・URL" /></label>
+						<label>ステータス
+							<select name="status">
+								<option value="">すべて</option>
+								<option value="new">未対応</option>
+								<option value="contacted">連絡済み</option>
+								<option value="nurturing">育成中</option>
+								<option value="closed">クローズ</option>
+								<option value="excluded">除外</option>
+							</select>
+						</label>
+						<label>優先度
+							<select name="priority">
+								<option value="">すべて</option>
+								<option value="high">高</option>
+								<option value="medium">中</option>
+								<option value="low">低</option>
+							</select>
+						</label>
+						<button type="submit">絞り込み</button>
+					</form>
+
+					<form id="my-list-update-form" class="form-grid compact">
+						<label>ステータス変更
+							<select name="status">
+								<option value="">変更しない</option>
+								<option value="new">未対応</option>
+								<option value="contacted">連絡済み</option>
+								<option value="nurturing">育成中</option>
+								<option value="closed">クローズ</option>
+								<option value="excluded">除外</option>
+							</select>
+						</label>
+						<label>優先度変更
+							<select name="priority">
+								<option value="">変更しない</option>
+								<option value="high">高</option>
+								<option value="medium">中</option>
+								<option value="low">低</option>
+							</select>
+						</label>
+						<label>担当者<input name="owner_name" placeholder="担当者名" /></label>
+						<label>メモ<input name="note" placeholder="商談メモ・備考など" /></label>
+						<button type="submit" class="ghost">選択項目を更新</button>
+						<button type="button" id="my-list-remove-btn" class="ghost danger">選択項目を削除</button>
+					</form>
+
+					<p id="my-list-result" class="muted"></p>
+
+					<div class="table-wrap">
+						<table id="my-list-table">
+							<thead>
+								<tr>
+									<th><input type="checkbox" id="my-list-select-all" /></th>
+									<th>企業・団体名</th>
+									<th>業種</th>
+									<th>業界</th>
+									<th>ステータス</th>
+									<th>優先度</th>
+									<th>最終連絡日</th>
+									<th>連絡回数</th>
+									<th>住所</th>
+								</tr>
+							</thead>
+							<tbody></tbody>
+						</table>
+					</div>
+				</div>
+			</section>
+
+			<section class="view" id="view-contact-forms">
+				<div class="panel">
+					<h3>問い合わせフォーム一覧</h3>
+					<p class="muted">取得結果一覧で選択した企業のWebサイト内から、問い合わせフォームURLを探索した結果を表示します。問い合わせフォームが見つからない場合は一覧に追加しません。</p>
+					<div class="proposal-builder">
+						<div class="proposal-builder-head">
+							<div>
+								<h4>提案文の自動作成</h4>
+								<p class="muted">問い合わせ先企業の情報とあなたの提案したい情報を元に、提案文の叩き台をAIで自動生成できます。</p>
+							</div>
+						</div>
+						<form id="proposal-generator-form" class="form-grid compact" onsubmit="return false;">
+							<label>あなたの社名<input name="sender_company" placeholder="例: 株式会社AutoSales" required /></label>
+							<label>あなたの名前<input name="sender_name" placeholder="例: 山田 太郎" required /></label>
+							<label>あなたのWEBサイト<input name="sender_website" placeholder="例: https://autosales.example.com または autosales.example.com" required /></label>
+							<label>文字数（500文字まで）<input name="target_length" type="number" min="120" max="500" step="10" value="280" required /></label>
+							<p class="proposal-section-title proposal-service-field">提案したいサービスまたは商品の内容</p>
+							<label class="proposal-service-field">
+								<textarea name="service_description" rows="3" placeholder="例: 整備工場向けの来店予約自動化サービス。電話受付の負担を減らし、予約漏れを防げます。" required></textarea>
+							</label>
+						</form>
+						<p id="proposal-target-summary" class="muted">問い合わせフォーム一覧の「提案文生成」ボタンを押すと、企業情報を反映した文案を作成します。</p>
+						<div class="proposal-output-tools">
+							<button type="button" id="copy-proposal-btn" class="ghost">提案文をコピー</button>
+							<span id="proposal-char-count" class="muted">0文字</span>
+						</div>
+						<textarea id="proposal-generator-result" class="proposal-result" rows="9" readonly placeholder="ここに生成された提案文が表示されます"></textarea>
+					</div>
+					<p id="contact-forms-result" class="muted"></p>
+					<div class="table-wrap">
+						<table id="contact-forms-table">
+							<thead>
+								<tr>
+									<th>企業・団体名</th>
+									<th>Webサイト</th>
+									<th>問い合わせフォームURL</th>
+									<th>提案文生成日</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td colspan="4" class="muted">まだ問い合わせフォームURLはありません。</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</div>
+			</section>
+
+		</main>
+	</div>
+	<div id="toast" class="toast" role="status" aria-live="polite"></div>
+	<footer class="main-footer" style="text-align:center; color:#7a8ab0; font-size:0.95rem; margin:48px 0 18px 0;">
+		&copy; 2026 macdown360 / Map to List
+		&nbsp;|&nbsp;
+		<a href="/terms.html" target="_blank" rel="noopener">利用規約</a>
+		&nbsp;|&nbsp;
+		<a href="https://maptolist.online/privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a>
+	</footer>
+	<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+	<script src="/static/app.js"></script>
+</body>
+</html>

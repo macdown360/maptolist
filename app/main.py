@@ -1529,10 +1529,11 @@ async def discover_contact_form_url(client: httpx.AsyncClient, website: str) -> 
 
 
 
-# / : 常にランディングページ
+
+# / : 常にトップページ（index.html）
 @app.get("/", response_class=HTMLResponse)
 def landing(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("landing.html", {"request": request, "app_base_url": APP_BASE_URL})
+    return templates.TemplateResponse("index.html", {"request": request, "app_base_url": APP_BASE_URL})
 
 # /app : ログイン済みならSPA本体、未ログインなら/へリダイレクト
 @app.get("/app", response_class=HTMLResponse)
@@ -1540,7 +1541,7 @@ def app_index(request: Request) -> HTMLResponse:
     user = get_current_user(request)
     if not user:
         return RedirectResponse("/")
-    return templates.TemplateResponse("index.html", {"request": request, "user": user, "app_base_url": APP_BASE_URL})
+    return templates.TemplateResponse("app.html", {"request": request, "user": user, "app_base_url": APP_BASE_URL})
 
 # 利用規約ページ
 @app.get("/terms.html", response_class=HTMLResponse)
