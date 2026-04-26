@@ -305,11 +305,12 @@ function showUserDetailModal(user) {
   // 既存モーダル削除
   const old = document.getElementById('user-detail-modal');
   if (old) old.remove();
+  const badge = document.getElementById('user-badge');
+  const rect = badge?.getBoundingClientRect();
   const modal = document.createElement('div');
   modal.id = 'user-detail-modal';
-  modal.className = 'user-detail-modal';
+  modal.className = 'user-detail-modal user-detail-modal-popover';
   modal.innerHTML = `
-    <div class="user-detail-modal-backdrop"></div>
     <div class="user-detail-modal-content">
       <button class="user-detail-modal-close" aria-label="閉じる">×</button>
       <div class="user-detail-modal-main">
@@ -327,9 +328,27 @@ function showUserDetailModal(user) {
     </div>
   `;
   document.body.appendChild(modal);
+  // 位置調整
+  if (badge && rect) {
+    const modalContent = modal.querySelector('.user-detail-modal-content');
+    modal.style.position = 'absolute';
+    modal.style.left = `${rect.left + window.scrollX}px`;
+    modal.style.top = `${rect.top + window.scrollY - (modalContent?.offsetHeight || 140) - 8}px`;
+    modal.style.zIndex = 10010;
+    modalContent?.classList.add('popover');
+  }
   // 閉じる
   modal.querySelector('.user-detail-modal-close').onclick = () => modal.remove();
-  modal.querySelector('.user-detail-modal-backdrop').onclick = () => modal.remove();
+  // バッジ以外クリックで閉じる
+  setTimeout(() => {
+    const closeOnOutside = (e) => {
+      if (!modal.contains(e.target) && e.target !== badge) {
+        modal.remove();
+        document.removeEventListener('mousedown', closeOnOutside);
+      }
+    };
+    document.addEventListener('mousedown', closeOnOutside);
+  }, 0);
 }
 
 function addActivity(text, who = 'system') {
