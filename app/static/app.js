@@ -281,18 +281,11 @@ async function loadUserBadge() {
     return;
   }
 
-  // ログイン済み
+  // ログイン済み: シンプルなアイコンとユーザー名のみ
   sidebarFoot.innerHTML = `
-    <div class="user-card">
+    <div class="user-card simple-user-card">
       <img src="${user.picture || '/static/user.svg'}" class="user-avatar" alt="user" />
-      <div class="user-info">
-        <div class="user-name">${escapeHtml(user.name || user.email || 'ユーザー')}</div>
-        <div class="user-email">${escapeHtml(user.email || '')}</div>
-        <div class="gmail-badge ${user.gmail_connected ? 'connected' : 'disconnected'}">
-          Gmail ${user.gmail_connected ? '連携済み' : '未連携'}
-        </div>
-        <a href="/auth/logout" class="logout-link">ログアウト</a>
-      </div>
+      <span class="user-name">${escapeHtml(user.name || user.email || 'ユーザー')}</span>
     </div>
   `;
 }
