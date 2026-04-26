@@ -1542,6 +1542,16 @@ def app_index(request: Request) -> HTMLResponse:
         return RedirectResponse("/")
     return templates.TemplateResponse("index.html", {"request": request, "user": user, "app_base_url": APP_BASE_URL})
 
+# 利用規約ページ
+@app.get("/terms.html", response_class=HTMLResponse)
+def terms(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse("terms.html", {"request": request, "app_base_url": APP_BASE_URL})
+
+# プライバシーポリシーページ
+@app.get("/privacy.html", response_class=HTMLResponse)
+def privacy(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse("privacy.html", {"request": request, "app_base_url": APP_BASE_URL})
+
 
 @app.get("/auth/login")
 async def auth_login(request: Request) -> RedirectResponse:
