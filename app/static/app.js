@@ -298,7 +298,6 @@ async function loadUserBadge() {
       });
     }
   }, 0);
-
 }
 
 // ユーザー詳細モーダル生成・表示
