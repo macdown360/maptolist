@@ -5,62 +5,202 @@
   <title>プライバシーポリシー | Map to List</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    body.legal {
+      background: #f8f9fa;
+      color: #222;
+      font-family: 'Noto Sans JP', 'Segoe UI', Arial, sans-serif;
+    }
+    .legal-header {
+      background: #fff;
+      border-bottom: 1px solid #e0e4ea;
+      padding: 24px 0 16px 0;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(60,80,120,0.04);
+    }
+    .legal-header h1 {
+      font-size: 2.2rem;
+      font-weight: 700;
+      margin: 0 0 8px 0;
+      color: #222;
+    }
+    .legal-header .subtitle {
+      color: #5f6f86;
+      font-size: 1.1rem;
+      margin-bottom: 0;
+    }
+    .legal-main-wrap {
+      display: flex;
+      max-width: 1080px;
+      margin: 32px auto 48px auto;
+      gap: 36px;
+      padding: 0 18px;
+    }
+    .legal-nav {
+      flex: 0 0 260px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(60,80,120,0.06);
+      padding: 28px 20px 24px 20px;
+      height: fit-content;
+      position: sticky;
+      top: 24px;
+      align-self: flex-start;
+    }
+    .legal-nav h2 {
+      font-size: 1.1rem;
+      margin: 0 0 18px 0;
+      color: #2e2b8c;
+      font-weight: 700;
+    }
+    .legal-nav ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .legal-nav li {
+      margin-bottom: 12px;
+    }
+    .legal-nav a {
+      color: #533afd;
+      text-decoration: none;
+      font-size: 1rem;
+      transition: color 0.13s;
+    }
+    .legal-nav a:hover {
+      color: #2e2b8c;
+      text-decoration: underline;
+    }
+    .legal-main {
+      flex: 1 1 0%;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(60,80,120,0.06);
+      padding: 38px 36px 38px 36px;
+      min-width: 0;
+    }
+    .legal-main section {
+      margin-bottom: 38px;
+    }
+    .legal-main h2 {
+      font-size: 1.3rem;
+      color: #2e2b8c;
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-weight: 700;
+    }
+    .legal-main h3 {
+      font-size: 1.1rem;
+      color: #222;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    .legal-main p, .legal-main ol, .legal-main ul {
+      font-size: 1rem;
+      line-height: 1.8;
+      color: #222;
+    }
+    .legal-footer {
+      text-align: center;
+      color: #7a8ab0;
+      font-size: 0.95rem;
+      margin: 48px 0 18px 0;
+    }
+    @media (max-width: 900px) {
+      .legal-main-wrap {
+        flex-direction: column;
+        gap: 0;
+      }
+      .legal-nav {
+        position: static;
+        margin-bottom: 24px;
+        width: 100%;
+        max-width: 100%;
+      }
+      .legal-main {
+        padding: 28px 10px 28px 10px;
+      }
+    }
+  </style>
 </head>
-<body>
-  <main class="legal-main">
+<body class="legal">
+  <header class="legal-header">
     <h1>プライバシーポリシー</h1>
-    <section>
-      <h2>1. 個人情報の取得</h2>
-      <p>本サービスは、ユーザーのGoogleアカウント情報（氏名、メールアドレス、アイコン画像等）、利用履歴、アクセスログ、Cookie等の情報を取得する場合があります。</p>
-    </section>
-    <section>
-      <h2>2. 個人情報の利用目的</h2>
-      <ol>
-        <li>本サービスの提供・運営のため</li>
-        <li>本人確認、ユーザー認証のため</li>
-        <li>不正利用防止・セキュリティ確保のため</li>
-        <li>サービス改善・新機能開発・お問い合わせ対応のため</li>
-        <li>法令等に基づく対応のため</li>
-      </ol>
-    </section>
-    <section>
-      <h2>3. 個人情報の第三者提供</h2>
-      <ol>
-        <li>取得した個人情報は、以下の場合を除き、第三者に提供しません。<br>
-          (1) ユーザー本人の同意がある場合<br>
-          (2) 法令に基づく場合<br>
-          (3) 人の生命、身体または財産の保護のために必要な場合で、本人の同意を得ることが困難な場合<br>
-          (4) サービス運営上必要な業務委託先に提供する場合（この場合、委託先の適切な監督を行います）
-        </li>
-      </ol>
-    </section>
-    <section>
-      <h2>4. 外部サービスとの連携</h2>
-      <p>本サービスはGoogle等の外部サービスと連携する場合があります。連携先サービスのプライバシーポリシーもご確認ください。</p>
-    </section>
-    <section>
-      <h2>5. 個人情報の管理</h2>
-      <ol>
-        <li>運営者は、個人情報の漏えい、滅失または毀損の防止、その他個人情報の安全管理のために必要かつ適切な措置を講じます。</li>
-      </ol>
-    </section>
-    <section>
-      <h2>6. 開示・訂正・利用停止等の請求</h2>
-      <ol>
-        <li>ユーザーは、自己の個人情報について、開示・訂正・利用停止・削除等を求めることができます。ご希望の場合は運営者までご連絡ください。</li>
-      </ol>
-    </section>
-    <section>
-      <h2>7. プライバシーポリシーの変更</h2>
-      <ol>
-        <li>運営者は、必要に応じて本ポリシーを変更することがあります。変更後の内容は本ページに掲載した時点で効力を生じます。</li>
-      </ol>
-    </section>
-    <section>
-      <h2>8. お問い合わせ窓口</h2>
-      <p>本ポリシーに関するお問い合わせは、運営者までご連絡ください。</p>
-    </section>
-    <p style="margin-top:2em"><a href="/">トップへ戻る</a></p>
-  </main>
+    <div class="subtitle">Map to List サービス プライバシーポリシー</div>
+  </header>
+  <div class="legal-main-wrap">
+    <nav class="legal-nav" aria-label="目次">
+      <h2>目次</h2>
+      <ul>
+        <li><a href="#section1">1. 個人情報の取得</a></li>
+        <li><a href="#section2">2. 個人情報の利用目的</a></li>
+        <li><a href="#section3">3. 個人情報の第三者提供</a></li>
+        <li><a href="#section4">4. 外部サービスとの連携</a></li>
+        <li><a href="#section5">5. 個人情報の管理</a></li>
+        <li><a href="#section6">6. Cookie等の利用</a></li>
+        <li><a href="#section7">7. プライバシーポリシーの変更</a></li>
+        <li><a href="#section8">8. お問い合わせ</a></li>
+      </ul>
+    </nav>
+    <main class="legal-main">
+      <section id="section1">
+        <h2>1. 個人情報の取得</h2>
+        <p>本サービスは、ユーザーのGoogleアカウント情報（氏名、メールアドレス、アイコン画像等）、利用履歴、アクセスログ、Cookie等の情報を取得する場合があります。</p>
+      </section>
+      <section id="section2">
+        <h2>2. 個人情報の利用目的</h2>
+        <ol>
+          <li>本サービスの提供・運営のため</li>
+          <li>本人確認、ユーザー認証のため</li>
+          <li>不正利用防止・セキュリティ確保のため</li>
+          <li>サービス改善・新機能開発・お問い合わせ対応のため</li>
+          <li>法令等に基づく対応のため</li>
+        </ol>
+      </section>
+      <section id="section3">
+        <h2>3. 個人情報の第三者提供</h2>
+        <ol>
+          <li>取得した個人情報は、以下の場合を除き、第三者に提供しません。<br>
+            (1) ユーザー本人の同意がある場合<br>
+            (2) 法令に基づく場合<br>
+            (3) 人の生命、身体または財産の保護のために必要な場合で、本人の同意を得ることが困難な場合<br>
+            (4) サービス運営上必要な業務委託先に提供する場合（この場合、委託先の適切な監督を行います）
+          </li>
+        </ol>
+      </section>
+      <section id="section4">
+        <h2>4. 外部サービスとの連携</h2>
+        <p>本サービスはGoogle等の外部サービスと連携する場合があります。連携先サービスのプライバシーポリシーもご確認ください。</p>
+      </section>
+      <section id="section5">
+        <h2>5. 個人情報の管理</h2>
+        <ol>
+          <li>運営者は、個人情報の漏えい、滅失または毀損の防止、その他個人情報の安全管理のために必要かつ適切な措置を講じます。</li>
+        </ol>
+      </section>
+      <section id="section6">
+        <h2>6. Cookie等の利用</h2>
+        <ol>
+          <li>本サービスは、利便性向上や利用状況分析のため、Cookie等の技術を利用する場合があります。</li>
+        </ol>
+      </section>
+      <section id="section7">
+        <h2>7. プライバシーポリシーの変更</h2>
+        <ol>
+          <li>運営者は、必要に応じて本ポリシーを変更することがあります。変更後の内容は本ページに掲載した時点で効力を生じます。</li>
+        </ol>
+      </section>
+      <section id="section8">
+        <h2>8. お問い合わせ</h2>
+        <p>本ポリシーに関するお問い合わせは、運営者までご連絡ください。</p>
+      </section>
+      <div class="legal-footer">
+        &copy; {{ "now" | datetime("%Y") }} macdown360 / Map to List
+        &nbsp;|&nbsp;
+        <a href="/terms.html">利用規約</a>
+        &nbsp;|&nbsp;
+        <a href="/">トップへ戻る</a>
+      </div>
+    </main>
 </body>
 </html>

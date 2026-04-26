@@ -5,39 +5,240 @@
   <title>利用規約 | Map to List</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    body.legal {
+      background: #f8f9fa;
+      color: #222;
+      font-family: 'Noto Sans JP', 'Segoe UI', Arial, sans-serif;
+    }
+    .legal-header {
+      background: #fff;
+      border-bottom: 1px solid #e0e4ea;
+      padding: 24px 0 16px 0;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(60,80,120,0.04);
+    }
+    .legal-header h1 {
+      font-size: 2.2rem;
+      font-weight: 700;
+      margin: 0 0 8px 0;
+      color: #222;
+    }
+    .legal-header .subtitle {
+      color: #5f6f86;
+      font-size: 1.1rem;
+      margin-bottom: 0;
+    }
+    .legal-main-wrap {
+      display: flex;
+      max-width: 1080px;
+      margin: 32px auto 48px auto;
+      gap: 36px;
+      padding: 0 18px;
+    }
+    .legal-nav {
+      flex: 0 0 260px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(60,80,120,0.06);
+      padding: 28px 20px 24px 20px;
+      height: fit-content;
+      position: sticky;
+      top: 24px;
+      align-self: flex-start;
+    }
+    .legal-nav h2 {
+      font-size: 1.1rem;
+      margin: 0 0 18px 0;
+      color: #2e2b8c;
+      font-weight: 700;
+    }
+    .legal-nav ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .legal-nav li {
+      margin-bottom: 12px;
+    }
+    .legal-nav a {
+      color: #533afd;
+      text-decoration: none;
+      font-size: 1rem;
+      transition: color 0.13s;
+    }
+    .legal-nav a:hover {
+      color: #2e2b8c;
+      text-decoration: underline;
+    }
+    .legal-main {
+      flex: 1 1 0%;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(60,80,120,0.06);
+      padding: 38px 36px 38px 36px;
+      min-width: 0;
+    }
+    .legal-main section {
+      margin-bottom: 38px;
+    }
+    .legal-main h2 {
+      font-size: 1.3rem;
+      color: #2e2b8c;
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-weight: 700;
+    }
+    .legal-main h3 {
+      font-size: 1.1rem;
+      color: #222;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    .legal-main p, .legal-main ol, .legal-main ul {
+      font-size: 1rem;
+      line-height: 1.8;
+      color: #222;
+    }
+    .legal-footer {
+      text-align: center;
+      color: #7a8ab0;
+      font-size: 0.95rem;
+      margin: 48px 0 18px 0;
+    }
+    @media (max-width: 900px) {
+      .legal-main-wrap {
+        flex-direction: column;
+        gap: 0;
+      }
+      .legal-nav {
+        position: static;
+        margin-bottom: 24px;
+        width: 100%;
+        max-width: 100%;
+      }
+      .legal-main {
+        padding: 28px 10px 28px 10px;
+      }
+    }
+  </style>
 </head>
-<body>
-  <main class="legal-main">
+<body class="legal">
+  <header class="legal-header">
     <h1>利用規約</h1>
-    <section>
-      <h2>第1条（総則）</h2>
-      <p>本利用規約（以下「本規約」といいます）は、macdown360（以下「運営者」といいます）が提供する「Map to List」（以下「本サービス」といいます）の利用条件を定めるものです。ユーザーは本規約に同意した上で本サービスを利用するものとします。</p>
-    </section>
-    <section>
-      <h2>第2条（定義）</h2>
-      <p>本規約において「ユーザー」とは、本サービスを利用するすべての個人または法人をいいます。</p>
-    </section>
-    <section>
-      <h2>第3条（利用登録）</h2>
-      <ol>
-        <li>本サービスの利用希望者は、運営者の定める方法により利用登録を申請し、運営者がこれを承認した時点で利用契約が成立します。</li>
-        <li>運営者は、利用申請者が以下のいずれかに該当する場合、利用登録を拒否することがあります。<br>
-          (1) 利用登録の申請に際し虚偽の事項を届け出た場合<br>
-          (2) 本規約に違反したことがある者からの申請である場合<br>
-          (3) その他、運営者が利用登録を相当でないと判断した場合
-        </li>
-      </ol>
-    </section>
-    <section>
-      <h2>第4条（アカウント管理）</h2>
-      <ol>
-        <li>ユーザーは、自己の責任において本サービスのアカウント情報を適切に管理・保管するものとします。</li>
-        <li>アカウントの第三者への譲渡・貸与・共有等は禁止します。</li>
-        <li>アカウントの不正利用等による損害について、運営者は一切責任を負いません。</li>
-      </ol>
-    </section>
-    <section>
-      <h2>第5条（禁止事項）</h2>
+    <div class="subtitle">Map to List サービス利用規約</div>
+  </header>
+  <div class="legal-main-wrap">
+    <nav class="legal-nav" aria-label="目次">
+      <h2>目次</h2>
+      <ul>
+        <li><a href="#article1">第1条（総則）</a></li>
+        <li><a href="#article2">第2条（定義）</a></li>
+        <li><a href="#article3">第3条（利用登録）</a></li>
+        <li><a href="#article4">第4条（アカウント管理）</a></li>
+        <li><a href="#article5">第5条（禁止事項）</a></li>
+        <li><a href="#article6">第6条（サービスの提供の停止等）</a></li>
+        <li><a href="#article7">第7条（著作権）</a></li>
+        <li><a href="#article8">第8条（免責事項）</a></li>
+        <li><a href="#article9">第9条（規約の変更）</a></li>
+        <li><a href="#article10">第10条（通知または連絡）</a></li>
+        <li><a href="#article11">第11条（準拠法・裁判管轄）</a></li>
+      </ul>
+    </nav>
+    <main class="legal-main">
+      <section id="article1">
+        <h2>第1条（総則）</h2>
+        <p>本利用規約（以下「本規約」といいます）は、macdown360（以下「運営者」といいます）が提供する「Map to List」（以下「本サービス」といいます）の利用条件を定めるものです。ユーザーは本規約に同意した上で本サービスを利用するものとします。</p>
+      </section>
+      <section id="article2">
+        <h2>第2条（定義）</h2>
+        <p>本規約において「ユーザー」とは、本サービスを利用するすべての個人または法人をいいます。</p>
+      </section>
+      <section id="article3">
+        <h2>第3条（利用登録）</h2>
+        <ol>
+          <li>本サービスの利用希望者は、運営者の定める方法により利用登録を申請し、運営者がこれを承認した時点で利用契約が成立します。</li>
+          <li>運営者は、利用申請者が以下のいずれかに該当する場合、利用登録を拒否することがあります。<br>
+            (1) 利用登録の申請に際し虚偽の事項を届け出た場合<br>
+            (2) 本規約に違反したことがある者からの申請である場合<br>
+            (3) その他、運営者が利用登録を相当でないと判断した場合
+          </li>
+        </ol>
+      </section>
+      <section id="article4">
+        <h2>第4条（アカウント管理）</h2>
+        <ol>
+          <li>ユーザーは、自己の責任において本サービスのアカウント情報を適切に管理・保管するものとします。</li>
+          <li>アカウントの第三者への譲渡・貸与・共有等は禁止します。</li>
+          <li>アカウントの不正利用等による損害について、運営者は一切責任を負いません。</li>
+        </ol>
+      </section>
+      <section id="article5">
+        <h2>第5条（禁止事項）</h2>
+        <ol>
+          <li>ユーザーは、本サービスの利用にあたり、以下の行為をしてはなりません。
+            <ul>
+              <li>法令または公序良俗に違反する行為</li>
+              <li>犯罪行為に関連する行為</li>
+              <li>本サービスの運営を妨害する行為</li>
+              <li>他のユーザーまたは第三者の権利・利益を侵害する行為</li>
+              <li>不正アクセス、システムへの不正侵入・改ざん・破壊行為</li>
+              <li>虚偽または誤解を招く情報の提供</li>
+              <li>その他、運営者が不適切と判断する行為</li>
+            </ul>
+          </li>
+        </ol>
+      </section>
+      <section id="article6">
+        <h2>第6条（サービスの提供の停止等）</h2>
+        <ol>
+          <li>運営者は、ユーザーへの事前通知なく、本サービスの内容を変更・追加・中断・終了できるものとします。</li>
+          <li>運営者は、本サービスの提供、遅延、中断、終了等によりユーザーまたは第三者が被った損害について、一切責任を負いません。</li>
+        </ol>
+      </section>
+      <section id="article7">
+        <h2>第7条（著作権）</h2>
+        <ol>
+          <li>本サービスに関する著作権、商標権その他の知的財産権は、運営者または正当な権利者に帰属します。</li>
+          <li>ユーザーは、運営者の許諾なく、本サービスの全部または一部を複製、転載、改変、頒布等してはなりません。</li>
+        </ol>
+      </section>
+      <section id="article8">
+        <h2>第8条（免責事項）</h2>
+        <ol>
+          <li>運営者は、本サービスに関して、明示または黙示を問わず、いかなる保証も行いません。</li>
+          <li>ユーザーが本サービスを利用したこと、または利用できなかったことにより生じた一切の損害について、運営者は責任を負いません。</li>
+          <li>ユーザー間またはユーザーと第三者との間で生じたトラブルについて、運営者は一切関与せず、責任を負いません。</li>
+        </ol>
+      </section>
+      <section id="article9">
+        <h2>第9条（規約の変更）</h2>
+        <ol>
+          <li>運営者は、必要と判断した場合には、ユーザーに通知することなく本規約を変更できるものとします。</li>
+          <li>規約変更後にユーザーが本サービスを利用した場合、当該変更に同意したものとみなします。</li>
+        </ol>
+      </section>
+      <section id="article10">
+        <h2>第10条（通知または連絡）</h2>
+        <ol>
+          <li>本サービスに関する通知または連絡は、運営者が適当と判断する方法で行います。</li>
+          <li>ユーザーが運営者に連絡する場合は、運営者が指定する方法により行うものとします。</li>
+        </ol>
+      </section>
+      <section id="article11">
+        <h2>第11条（準拠法・裁判管轄）</h2>
+        <ol>
+          <li>本規約の解釈・適用は日本法に準拠します。</li>
+          <li>本サービスに関して紛争が生じた場合、運営者の本店所在地を管轄する裁判所を第一審の専属的合意管轄裁判所とします。</li>
+        </ol>
+      </section>
+      <div class="legal-footer">
+        &copy; {{ "now" | datetime("%Y") }} macdown360 / Map to List
+        &nbsp;|&nbsp;
+        <a href="/privacy.html">プライバシーポリシー</a>
+        &nbsp;|&nbsp;
+        <a href="/">トップへ戻る</a>
+      </div>
       <ol>
         <li>ユーザーは、本サービスの利用にあたり、以下の行為をしてはなりません。
           <ul>
