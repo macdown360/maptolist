@@ -1527,11 +1527,16 @@ async def discover_contact_form_url(client: httpx.AsyncClient, website: str) -> 
     return str(info.get("form_url", ""))
 
 
+
+# / : 未ログインならランディング、ログイン済みならSPA本体
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request) -> HTMLResponse:
-    # 未ログイン時もindex.htmlを返し、SPA内でログインUIを制御
+def landing_or_app(request: Request) -> HTMLResponse:
     user = get_current_user(request)
-    return templates.TemplateResponse("index.html", {"request": request, "user": user, "app_base_url": APP_BASE_URL})
+    if user:
+        # ログイン済みならSPA本体
+        return templates.TemplateResponse("index.html", {"request": request, "user": user, "app_base_url": APP_BASE_URL})
+    # 未ログインならランディング
+    return templates.TemplateResponse("landing.html", {"request": request, "app_base_url": APP_BASE_URL})
 
 
 @app.get("/auth/login")
