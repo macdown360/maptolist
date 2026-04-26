@@ -283,11 +283,51 @@ async function loadUserBadge() {
 
   // ログイン済み: シンプルなアイコンとユーザー名のみ
   sidebarFoot.innerHTML = `
-    <div class="user-card simple-user-card">
+    <div class="user-card simple-user-card" id="user-badge">
       <img src="${user.picture || '/static/user.svg'}" class="user-avatar" alt="user" />
       <span class="user-name">${escapeHtml(user.name || user.email || 'ユーザー')}</span>
     </div>
   `;
+  // 詳細モーダル導線
+  setTimeout(() => {
+    const badge = document.getElementById('user-badge');
+    if (badge) {
+      badge.style.cursor = 'pointer';
+      badge.addEventListener('click', () => {
+        showUserDetailModal(user);
+      });
+    }
+  }, 0);
+
+}
+
+// ユーザー詳細モーダル生成・表示
+function showUserDetailModal(user) {
+  // 既存モーダル削除
+  const old = document.getElementById('user-detail-modal');
+  if (old) old.remove();
+  const modal = document.createElement('div');
+  modal.id = 'user-detail-modal';
+  modal.className = 'user-detail-modal';
+  modal.innerHTML = `
+    <div class="user-detail-modal-backdrop"></div>
+    <div class="user-detail-modal-content">
+      <button class="user-detail-modal-close" aria-label="閉じる">×</button>
+      <div class="user-detail-modal-main">
+        <img src="${user.picture || '/static/user.svg'}" class="user-avatar user-detail-avatar" alt="user" />
+        <div class="user-detail-info">
+          <div class="user-detail-name">${escapeHtml(user.name || 'ユーザー')}</div>
+          <div class="user-detail-email">${escapeHtml(user.email || '')}</div>
+        </div>
+      </div>
+      <a href="/auth/logout" class="user-detail-logout-btn">ログアウト</a>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  // 閉じる
+  modal.querySelector('.user-detail-modal-close').onclick = () => modal.remove();
+  modal.querySelector('.user-detail-modal-backdrop').onclick = () => modal.remove();
+}
 }
 
 function addActivity(text, who = 'system') {
