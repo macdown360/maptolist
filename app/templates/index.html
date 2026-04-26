@@ -15,8 +15,8 @@
     .google-logo { width: 22px; height: 22px; }
   </style>
 </head>
-<body>
-  <div class="landing-card">
+<body style="min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;">
+  <div class="landing-card" style="margin-bottom:auto;">
     <div class="brand-title">Map to List</div>
     <div class="brand-desc">Googleアカウントでログインしてご利用ください</div>
     <a href="{{ app_base_url }}/auth/login" class="google-btn">
@@ -30,12 +30,12 @@
       Googleでログイン
     </a>
   </div>
-    <footer style="margin-top:36px; text-align:center; color:#7a8ab0; font-size:13px;">
-      <a href="/terms.html" target="_blank" rel="noopener" style="color:#533afd; text-decoration:none; margin:0 10px;">利用規約</a>
-      |
-      <a href="https://maptolist.online/privacy.html" target="_blank" rel="noopener" style="color:#533afd; text-decoration:none; margin:0 10px;">プライバシーポリシー</a>
-      <br />
-      &copy; 2026 Map to List
-    </footer>
+  <footer style="margin-top:auto;width:100vw;text-align:center; color:#7a8ab0; font-size:13px; padding:18px 0 10px 0;">
+    <a href="/terms.html" target="_blank" rel="noopener" style="color:#533afd; text-decoration:none; margin:0 10px;">利用規約</a>
+    |
+    <a href="https://maptolist.online/privacy.html" target="_blank" rel="noopener" style="color:#533afd; text-decoration:none; margin:0 10px;">プライバシーポリシー</a>
+    <br />
+    &copy; 2026 Map to List
+  </footer>
 </body>
 </html>
