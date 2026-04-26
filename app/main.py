@@ -3163,7 +3163,7 @@ def remove_my_list_item(item_id: int, user: Optional[dict[str, Any]] = Depends(g
 @app.get("/api/contact-logs")
 def get_contact_logs(
     request: Request,
-    user: CurrentUser,
+    user: Optional[dict[str, Any]] = Depends(get_current_user),
     lead_id: int | None = Query(None),
     q: str = Query("", description="企業名・件名・本文検索"),
     from_date: str = Query("", description="開始日(YYYY-MM-DD)"),
