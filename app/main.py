@@ -1595,7 +1595,7 @@ def auth_me(user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[
 
 
 @app.get("/api/settings/google-maps-key")
-def get_google_maps_key_status(user: CurrentUser) -> dict[str, Any]:
+def get_google_maps_key_status(user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     init_db()
     key = get_google_api_key(user)
     if not key:
@@ -1607,7 +1607,7 @@ def get_google_maps_key_status(user: CurrentUser) -> dict[str, Any]:
 
 
 @app.post("/api/settings/google-maps-key")
-def set_google_maps_key(payload: GoogleMapsKeyRequest, user: CurrentUser) -> dict[str, Any]:
+def set_google_maps_key(payload: GoogleMapsKeyRequest, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     init_db()
     key = payload.api_key.strip()
     if not key:
