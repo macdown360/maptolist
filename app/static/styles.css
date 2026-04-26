@@ -167,10 +167,8 @@ body.sidebar-closed .sidebar-toggle {
   left: 18px;
 }
 
+
 @media (max-width: 900px) {
-  .app-shell {
-    grid-template-columns: 0 1fr;
-  }
   .sidebar {
     position: fixed;
     left: 0;
