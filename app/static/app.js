@@ -1,3 +1,5 @@
+// --- hydrateMyListFilterFromUrl: グローバル定義 ---
+
 const importForm = document.querySelector('#import-form');
 const filterForm = document.querySelector('#filter-form');
 const myListFilterForm = document.querySelector('#my-list-filter-form');
