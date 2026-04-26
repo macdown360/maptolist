@@ -543,7 +543,6 @@ function renderLeadsTable(items) {
     `,
     )
     .join('');
-}
 
 function updateLeadSortIndicators() {
   if (!leadsThead) return;
@@ -651,6 +650,8 @@ function renderLeadPreviewFromLocal() {
 
 function renderMyListTable(items) {
   myListTbody.innerHTML = items
+  if (!myListTbody) return;
+  myListTbody.innerHTML = items
     .map(
       (item) => `
       <tr>
@@ -671,6 +672,8 @@ function renderMyListTable(items) {
 
 function renderHistoryTable(items) {
   const keyword = String(historyFilterForm?.querySelector('input[name="q"]')?.value || '').trim();
+  historyTbody.innerHTML = items
+  if (!historyTbody) return;
   historyTbody.innerHTML = items
     .map(
       (item) => `
@@ -950,37 +953,26 @@ function hydrateContactFormsState() {
 function renderContactFormsTable(items) {
   if (!contactFormsTbody) return;
   if (!Array.isArray(items) || !items.length) {
-    contactFormsTbody.innerHTML = `
-      <tr>
-        <td colspan="4" class="muted">まだ問い合わせフォームURLはありません。取得結果一覧で企業を選択して探索してください。</td>
-      </tr>
-    `;
+    contactFormsTbody.innerHTML = '<tr><td colspan="8"><span class="muted">データなし</span></td></tr>';
     return;
   }
-
-  const normalizedItems = items.map(normalizeContactDiscoveryItem);
-
-  contactFormsTbody.innerHTML = normalizedItems
+  contactFormsTbody.innerHTML = items
     .map(
       (item) => `
-        <tr>
-          <td>
-            <div class="lead-name-with-action">
-              <span>${escapeHtml(item.lead_name || '名称未設定')}</span>
-              <button type="button" class="ghost generate-proposal-btn" data-lead-id="${Number(item.lead_id) || ''}" data-lead-name="${escapeHtml(item.lead_name || '')}" data-website="${escapeHtml(item.website || '')}" data-form-url="${escapeHtml(item.form_url || '')}">提案文生成</button>
-            </div>
-          </td>
-          <td>
-            ${item.website ? `<a class="table-link" href="${escapeHtml(item.website)}" target="_blank" rel="noopener noreferrer">公式サイトを開く</a><div class="mini-url">${escapeHtml(formatUrlLabel(item.website))}</div>` : '<span class="muted">-</span>'}
-          </td>
-          <td>
-            ${item.form_url ? `<a class="table-link form-link open-form-link" href="${escapeHtml(item.form_url)}" data-form-url="${escapeHtml(item.form_url)}" data-lead-name="${escapeHtml(item.lead_name || '')}" data-website="${escapeHtml(item.website || '')}" target="_blank" rel="noopener noreferrer">フォームを開く</a><div class="mini-url">${escapeHtml(formatUrlLabel(item.form_url))}</div>` : '<span class="muted">-</span>'}
-          </td>
-          <td class="date-cell">${item.proposal_generated_at ? escapeHtml(formatDateOnly(item.proposal_generated_at)) : '<span class="muted">-</span>'}</td>
-        </tr>
-      `,
+      <tr>
+        <td>${escapeHtml(item.name)}</td>
+        <td>${escapeHtml(item.url)}</td>
+        <td>${escapeHtml(item.email)}</td>
+        <td>${escapeHtml(item.tel)}</td>
+        <td>${escapeHtml(item.prefecture)}</td>
+        <td>${escapeHtml(item.city)}</td>
+        <td>${escapeHtml(item.category)}</td>
+        <td>${escapeHtml(item.industry)}</td>
+      </tr>
+    `,
     )
     .join('');
+}
 }
 
 function getSelectedLeadIds() {
@@ -1643,6 +1635,7 @@ async function discoverSelectedContactForms() {
 }
 
 async function fetchSuppressions() {
+  if (!suppressionList) return;
   const res = await apiFetch('/api/suppressions');
   if (!res) return;
   const data = await res.json();
@@ -1652,6 +1645,7 @@ async function fetchSuppressions() {
 }
 
 async function fetchAdapters() {
+  if (!adapterList) return;
   const res = await apiFetch('/api/form-adapters');
   if (!res) return;
   const data = await res.json();
@@ -1661,6 +1655,7 @@ async function fetchAdapters() {
 }
 
 async function fetchAuditLogs() {
+  if (!auditList) return;
   const res = await apiFetch('/api/audit-logs?limit=100');
   if (!res) return;
   const data = await res.json();
@@ -1716,6 +1711,7 @@ function renderPlaceTypeOptions(items, selectedValue = '') {
   }
 
   placeTypeSelect.innerHTML = html;
+  if (!placeTypeSelect) return;
   const exists = selectedValue && items.some((x) => x.value === selectedValue);
   placeTypeSelect.value = exists ? selectedValue : '';
 }
