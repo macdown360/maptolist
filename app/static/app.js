@@ -270,6 +270,15 @@ async function loadUserBadge() {
     return;
   }
 
+  if (!user) {
+    sidebarFoot.innerHTML = `
+      <div style="display:flex;justify-content:center;align-items:center;padding:16px 0;">
+        <a href="${API_BASE_URL}/auth/login" style="display:inline-block;padding:7px 18px;background:#533afd;color:#fff;font-weight:600;border-radius:20px;font-size:14px;text-decoration:none;box-shadow:0 1px 4px #e5e5f7;transition:background 0.15s;">ログイン</a>
+      </div>
+    `;
+    return;
+  }
+
   // ログイン済み
   sidebarFoot.innerHTML = `
     <div class="user-card">
