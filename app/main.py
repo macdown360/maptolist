@@ -902,7 +902,7 @@ def get_or_create_demo_user() -> dict[str, Any]:
 
 
 # FastAPI dependency alias
-CurrentUser = Annotated[dict[str, Any] | None, Depends(lambda request: get_current_user(request))]
+
 
 
 def validate_my_list_status(status: str) -> str:
@@ -1581,7 +1581,7 @@ def auth_logout(request: Request) -> RedirectResponse:
 
 
 @app.get("/api/auth/me")
-def auth_me(user: CurrentUser) -> dict[str, Any]:
+def auth_me(user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     if not user:
         return {"user": None}
     return {
@@ -2917,7 +2917,7 @@ def save_contact_log(lead_id: int, channel: str, status: str, subject: str, mess
 @app.get("/api/my-list")
 def get_my_list(
     request: Request,
-    user: CurrentUser,
+    user: Optional[dict[str, Any]] = Depends(get_current_user),
     q: str = Query("", description="会社名や住所で検索"),
     status: str = Query("", description="マイリスト状態フィルタ"),
     priority: str = Query("", description="優先度フィルタ"),
