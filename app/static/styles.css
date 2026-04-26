@@ -147,6 +147,7 @@ body.sidebar-closed .sidebar {
   pointer-events: none;
 }
 
+
 .sidebar-toggle {
   position: fixed;
   top: 18px;
@@ -163,10 +164,6 @@ body.sidebar-closed .sidebar {
   display: block;
   transition: left 0.25s cubic-bezier(.4,0,.2,1);
 }
-body.sidebar-closed .sidebar-toggle {
-  left: 18px;
-}
-
 
 @media (max-width: 900px) {
   .sidebar {
@@ -179,6 +176,7 @@ body.sidebar-closed .sidebar-toggle {
   }
   .sidebar-toggle {
     left: 18px;
+    display: block;
   }
 }
 
