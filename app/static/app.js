@@ -320,6 +320,10 @@ function showUserDetailModal(user) {
         </div>
       </div>
       <a href="/auth/logout" class="user-detail-logout-btn">ログアウト</a>
+      <div class="user-detail-links">
+        <a href="/terms.html" target="_blank" rel="noopener">利用規約</a> |
+        <a href="/privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a>
+      </div>
     </div>
   `;
   document.body.appendChild(modal);
