@@ -1,3 +1,5 @@
+
+# /login ルート: ログインページを返す
 # ...（中略：app = FastAPI(...)の後ろに移動）...
 import asyncio
 import base64
