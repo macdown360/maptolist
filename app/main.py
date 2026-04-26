@@ -1583,7 +1583,7 @@ def auth_logout(request: Request) -> RedirectResponse:
 @app.get("/api/auth/me")
 def auth_me(user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     if not user:
-        return {"user": None}
+        return {}
     return {
         "id": user["id"],
         "email": user["email"],
