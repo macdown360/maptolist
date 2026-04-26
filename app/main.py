@@ -902,7 +902,7 @@ def get_or_create_demo_user() -> dict[str, Any]:
 
 
 # FastAPI dependency alias
-CurrentUser = Annotated[dict[str, Any], Depends(require_user)]
+CurrentUser = Annotated[dict[str, Any] | None, Depends(lambda request: get_current_user(request))]
 
 
 def validate_my_list_status(status: str) -> str:
@@ -1582,6 +1582,8 @@ def auth_logout(request: Request) -> RedirectResponse:
 
 @app.get("/api/auth/me")
 def auth_me(user: CurrentUser) -> dict[str, Any]:
+    if not user:
+        return {"user": None}
     return {
         "id": user["id"],
         "email": user["email"],
@@ -2922,6 +2924,8 @@ def get_my_list(
     sort_by: str = Query("updated_at", description="並び替え項目"),
     sort_dir: str = Query("desc", description="並び順 asc/desc"),
 ) -> dict[str, Any]:
+    if not user:
+        return {"items": [], "filters": {"statuses": [], "priorities": []}, "sort": {"sort_by": sort_by, "sort_dir": sort_dir}}
     init_db()
     browser_client_id = get_browser_client_id(request)
 
