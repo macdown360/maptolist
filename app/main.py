@@ -1963,7 +1963,7 @@ def get_leads(
 
 
 @app.get("/api/leads/names")
-def get_lead_names(request: Request, user: CurrentUser, limit: int = Query(300, ge=1, le=2000)) -> dict[str, Any]:
+def get_lead_names(request: Request, user: Optional[dict[str, Any]] = Depends(get_current_user), limit: int = Query(300, ge=1, le=2000)) -> dict[str, Any]:
     init_db()
     adopt_orphan_leads(int(user["id"]))
     browser_client_id = get_browser_client_id(request)
@@ -2057,7 +2057,7 @@ async def import_google_places(request: Request, payload: ImportRequest, user: O
 
 
 @app.get("/api/place-types")
-def list_place_types(user: CurrentUser) -> dict[str, Any]:
+def list_place_types(user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     recommended_set = set(TYPE_PRIORITY)
     items = [
         {
@@ -2073,7 +2073,7 @@ def list_place_types(user: CurrentUser) -> dict[str, Any]:
 
 
 @app.post("/api/contact/email")
-async def send_email(request: Request, payload: ContactRequest, user: CurrentUser) -> dict[str, Any]:
+async def send_email(request: Request, payload: ContactRequest, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     init_db()
     browser_client_id = get_browser_client_id(request)
     if not payload.lead_ids:
@@ -2176,7 +2176,7 @@ async def send_email(request: Request, payload: ContactRequest, user: CurrentUse
 
 
 @app.post("/api/contact/form")
-def send_form(request: Request, payload: ContactRequest, user: CurrentUser) -> dict[str, Any]:
+def send_form(request: Request, payload: ContactRequest, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     init_db()
     browser_client_id = get_browser_client_id(request)
     if not payload.lead_ids:
@@ -2274,7 +2274,7 @@ def send_form(request: Request, payload: ContactRequest, user: CurrentUser) -> d
 
 
 @app.get("/api/form-adapters")
-def list_form_adapters(user: CurrentUser) -> dict[str, Any]:
+def list_form_adapters(user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     init_db()
     with get_connection() as conn:
         rows = conn.execute("SELECT * FROM form_adapters ORDER BY updated_at DESC").fetchall()
@@ -2282,7 +2282,7 @@ def list_form_adapters(user: CurrentUser) -> dict[str, Any]:
 
 
 @app.get("/api/contact-forms")
-def list_contact_forms(request: Request, user: CurrentUser) -> dict[str, Any]:
+def list_contact_forms(request: Request, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     init_db()
     browser_client_id = get_browser_client_id(request)
     with get_connection() as conn:
@@ -2414,7 +2414,7 @@ async def generate_proposal(request: Request, payload: ProposalGenerationRequest
 
 
 @app.post("/api/contact-forms/discover")
-async def discover_contact_forms(request: Request, payload: LeadSelectionRequest, user: CurrentUser) -> dict[str, Any]:
+async def discover_contact_forms(request: Request, payload: LeadSelectionRequest, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     init_db()
     browser_client_id = get_browser_client_id(request)
     if not payload.lead_ids:
@@ -2515,7 +2515,7 @@ async def discover_contact_forms(request: Request, payload: LeadSelectionRequest
 
 
 @app.post("/api/form-adapters")
-def create_form_adapter(payload: FormAdapterRequest, user: CurrentUser) -> dict[str, Any]:
+def create_form_adapter(payload: FormAdapterRequest, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     init_db()
     domain = normalize_domain(payload.domain if payload.domain.startswith("http") else f"https://{payload.domain}")
     if not domain:
@@ -2551,7 +2551,7 @@ def create_form_adapter(payload: FormAdapterRequest, user: CurrentUser) -> dict[
 
 
 @app.get("/api/suppressions")
-def list_suppressions(user: CurrentUser) -> dict[str, Any]:
+def list_suppressions(user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     init_db()
     with get_connection() as conn:
         rows = conn.execute("SELECT * FROM suppression_list ORDER BY created_at DESC").fetchall()
@@ -2559,7 +2559,7 @@ def list_suppressions(user: CurrentUser) -> dict[str, Any]:
 
 
 @app.post("/api/suppressions")
-def add_suppression(payload: SuppressionRequest, user: CurrentUser) -> dict[str, Any]:
+def add_suppression(payload: SuppressionRequest, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     init_db()
     email = normalize_email(payload.email)
     if not EMAIL_REGEX.fullmatch(email):
@@ -2581,7 +2581,7 @@ def add_suppression(payload: SuppressionRequest, user: CurrentUser) -> dict[str,
 
 
 @app.delete("/api/suppressions/{email}")
-def remove_suppression(email: str, user: CurrentUser) -> dict[str, Any]:
+def remove_suppression(email: str, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     init_db()
     normalized = normalize_email(email)
     with get_connection() as conn:
@@ -2591,7 +2591,7 @@ def remove_suppression(email: str, user: CurrentUser) -> dict[str, Any]:
 
 
 @app.post("/api/leads/tags/bulk")
-def update_manual_tags(payload: BulkTagRequest, user: CurrentUser) -> dict[str, Any]:
+def update_manual_tags(payload: BulkTagRequest, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     init_db()
     if not payload.lead_ids:
         raise HTTPException(status_code=400, detail="対象企業を選択してください")
@@ -2621,7 +2621,7 @@ def update_manual_tags(payload: BulkTagRequest, user: CurrentUser) -> dict[str, 
 
 
 @app.get("/api/audit-logs")
-def get_audit_logs(user: CurrentUser, limit: int = Query(50, ge=1, le=500)) -> dict[str, Any]:
+def get_audit_logs(user: Optional[dict[str, Any]] = Depends(get_current_user), limit: int = Query(50, ge=1, le=500)) -> dict[str, Any]:
     init_db()
     with get_connection() as conn:
         rows = conn.execute("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
@@ -3034,7 +3034,7 @@ def get_my_list(
 
 
 @app.post("/api/my-list")
-def add_to_my_list(request: Request, payload: MyListBulkAddRequest, user: CurrentUser) -> dict[str, Any]:
+def add_to_my_list(request: Request, payload: MyListBulkAddRequest, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     init_db()
     browser_client_id = get_browser_client_id(request)
     if not payload.lead_ids:
@@ -3100,7 +3100,7 @@ def add_to_my_list(request: Request, payload: MyListBulkAddRequest, user: Curren
 
 
 @app.patch("/api/my-list/{item_id}")
-def update_my_list_item(item_id: int, payload: MyListUpdateRequest, user: CurrentUser) -> dict[str, Any]:
+def update_my_list_item(item_id: int, payload: MyListUpdateRequest, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     init_db()
     updates: list[str] = []
     params: list[Any] = []
@@ -3149,7 +3149,7 @@ def update_my_list_item(item_id: int, payload: MyListUpdateRequest, user: Curren
 
 
 @app.delete("/api/my-list/{item_id}")
-def remove_my_list_item(item_id: int, user: CurrentUser) -> dict[str, Any]:
+def remove_my_list_item(item_id: int, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     init_db()
     with get_connection() as conn:
         cur = conn.execute("DELETE FROM my_list_items WHERE id = ? AND user_id = ?", (item_id, user["id"]))
@@ -3223,7 +3223,7 @@ def get_contact_logs(
 
 
 @app.get("/api/leads/{lead_id}/timeline")
-def get_lead_timeline(lead_id: int, request: Request, user: CurrentUser, limit: int = Query(200, ge=1, le=1000)) -> dict[str, Any]:
+def get_lead_timeline(lead_id: int, request: Request, user: Optional[dict[str, Any]] = Depends(get_current_user), limit: int = Query(200, ge=1, le=1000)) -> dict[str, Any]:
     init_db()
     browser_client_id = get_browser_client_id(request)
     with get_connection() as conn:
