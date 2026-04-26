@@ -1528,15 +1528,19 @@ async def discover_contact_form_url(client: httpx.AsyncClient, website: str) -> 
 
 
 
-# / : 未ログインならランディング、ログイン済みならSPA本体
+
+# / : 常にランディングページ
 @app.get("/", response_class=HTMLResponse)
-def landing_or_app(request: Request) -> HTMLResponse:
-    user = get_current_user(request)
-    if user:
-        # ログイン済みならSPA本体
-        return templates.TemplateResponse("index.html", {"request": request, "user": user, "app_base_url": APP_BASE_URL})
-    # 未ログインならランディング
+def landing(request: Request) -> HTMLResponse:
     return templates.TemplateResponse("landing.html", {"request": request, "app_base_url": APP_BASE_URL})
+
+# /app : ログイン済みならSPA本体、未ログインなら/へリダイレクト
+@app.get("/app", response_class=HTMLResponse)
+def app_index(request: Request) -> HTMLResponse:
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse("/")
+    return templates.TemplateResponse("index.html", {"request": request, "user": user, "app_base_url": APP_BASE_URL})
 
 
 @app.get("/auth/login")
@@ -1575,7 +1579,7 @@ async def auth_callback(request: Request) -> RedirectResponse:
     user = upsert_user(google_id, email, name, picture, access_token, refresh_token, token_expiry)
     request.session["user_id"] = user["id"]
     log_audit("login", "user", str(user["id"]), {"email": email})
-    return RedirectResponse("/")
+    return RedirectResponse("/app")
 
 
 @app.get("/auth/logout")
