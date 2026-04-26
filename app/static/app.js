@@ -331,7 +331,6 @@ function showUserDetailModal(user) {
   modal.querySelector('.user-detail-modal-close').onclick = () => modal.remove();
   modal.querySelector('.user-detail-modal-backdrop').onclick = () => modal.remove();
 }
-}
 
 function addActivity(text, who = 'system') {
   if (!activityFeed) return;
