@@ -140,21 +140,17 @@
 </head>
 <body>
   <div class="login-card">
-    <div class="brand-icon">📊</div>
-    <p class="brand-title">Map to List</p>
-    <p class="brand-sub">営業リード自動収集・連絡システム</p>
+    <div class="brand-icon" style="font-size:56px;margin-bottom:20px;">📊</div>
+    <p class="brand-title" style="font-size:32px;letter-spacing:-0.64px;margin-bottom:8px;">maptolist</p>
+    <p class="brand-sub" style="font-size:15px;color:#64748d;margin-bottom:32px;">営業リード自動収集・連絡システム</p>
 
-    <ul class="feature-list">
-      <li><span class="feature-icon">🗺️</span>Google マップから企業情報を自動取得</li>
-      <li><span class="feature-icon">✉️</span>Googleアカウントのメールで直接送信</li>
-      <li><span class="feature-icon">📋</span>配信停止・監査ログ・送信上限管理</li>
-    </ul>
+    <!-- claude.ai風に特徴リストは省略 or 非表示化（必要なら戻せます） -->
 
     {% if oauth_error %}
     <div class="alert">{{ oauth_error }}</div>
     {% endif %}
 
-    <a href="{{ app_base_url }}/auth/login" class="google-btn {% if not oauth_configured %}disabled{% endif %}">
+    <a href="{{ app_base_url }}/auth/login" class="google-btn {% if not oauth_configured %}disabled{% endif %}" style="margin-top:12px;margin-bottom:24px;font-size:17px;padding:18px 0;box-shadow:rgba(50,50,93,0.25) 0 18px 28px -16px,rgba(0,0,0,0.1) 0 12px 24px -12px;">
       <svg class="google-logo" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
         <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
         <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
@@ -173,10 +169,13 @@
     </div>
     {% endif %}
 
-    <p class="footer-note">
+    <p class="footer-note" style="margin-bottom:18px;">
       ログインすることで、メール送信のためのGmail権限を<br />
       このアプリに許可します。
     </p>
+    <div class="user-detail-links">
+      <a href="/terms" target="_blank">利用規約</a>・<a href="/privacy" target="_blank">プライバシーポリシー</a>
+    </div>
   </div>
 </body>
 </html>
