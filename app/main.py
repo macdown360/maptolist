@@ -1,6 +1,3 @@
- 
-
-
 # ...（中略：app = FastAPI(...)の後ろに移動）...
 import asyncio
 import base64
@@ -1964,6 +1961,8 @@ def get_leads(
 
 @app.get("/api/leads/names")
 def get_lead_names(request: Request, user: Optional[dict[str, Any]] = Depends(get_current_user), limit: int = Query(300, ge=1, le=2000)) -> dict[str, Any]:
+    if not user:
+        return {"items": []}
     init_db()
     adopt_orphan_leads(int(user["id"]))
     browser_client_id = get_browser_client_id(request)
@@ -1984,6 +1983,8 @@ def get_lead_names(request: Request, user: Optional[dict[str, Any]] = Depends(ge
 @app.post("/api/import/google-places")
 @limiter.limit(lambda: DEFAULT_RATE_LIMIT_PLACES)
 async def import_google_places(request: Request, payload: ImportRequest, user: Optional[dict] = None) -> dict[str, Any]:
+    if not user:
+        return {"items": []}
     init_db()
     adopt_orphan_leads(int(user["id"]))
     browser_client_id = get_browser_client_id(request)
@@ -2074,6 +2075,8 @@ def list_place_types(user: Optional[dict[str, Any]] = Depends(get_current_user))
 
 @app.post("/api/contact/email")
 async def send_email(request: Request, payload: ContactRequest, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
+    if not user:
+        raise HTTPException(status_code=401, detail="ログインが必要です")
     init_db()
     browser_client_id = get_browser_client_id(request)
     if not payload.lead_ids:
@@ -2168,8 +2171,7 @@ async def send_email(request: Request, payload: ContactRequest, user: Optional[d
             sent += 1
         except Exception as exc:  # noqa: BLE001
             save_contact_log(lead["id"], "email", "failed", payload.subject, str(exc))
-            log_audit("contact_email", "lead", str(lead["id"]), {"status": "failed", "error": str(exc)}, actor=user["email"])
-            errors += 1
+            log_audit("contact_email", "lead", str(lead["id"]), {"status": "failed", "error": str(exc)})
 
     via = "gmail" if use_gmail else ("dry_run" if dry_run else "smtp")
     return {"sent": sent, "skipped": skipped, "limited": limited, "errors": errors, "via": via}
@@ -3224,6 +3226,8 @@ def get_contact_logs(
 
 @app.get("/api/leads/{lead_id}/timeline")
 def get_lead_timeline(lead_id: int, request: Request, user: Optional[dict[str, Any]] = Depends(get_current_user), limit: int = Query(200, ge=1, le=1000)) -> dict[str, Any]:
+    if not user:
+        raise HTTPException(status_code=404, detail="企業が見つかりません")
     init_db()
     browser_client_id = get_browser_client_id(request)
     with get_connection() as conn:
@@ -3241,13 +3245,4 @@ def get_lead_timeline(lead_id: int, request: Request, user: Optional[dict[str, A
             """,
             (lead_id, limit),
         ).fetchall()
-
-    return {
-        "lead": {
-            "id": lead["id"],
-            "name": lead["name"],
-            "email": lead["email"],
-            "website": lead["website"],
-        },
-        "items": [dict(r) for r in logs],
-    }
+    return {"lead": dict(lead), "logs": [dict(r) for r in logs]}

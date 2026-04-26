@@ -85,7 +85,16 @@ const LEADS_CACHE_STORAGE_KEY = 'maptolist.leads_cache.v2';
 const LEADS_FILTER_STORAGE_KEY = 'maptolist.leads_filter.v2';
 const CONTACT_FORMS_CACHE_STORAGE_KEY = 'maptolist.contact_forms_cache.v2';
 const BROWSER_CLIENT_ID_STORAGE_KEY = 'maptolist.browser_client_id.v1';
-const API_BASE_URL = String(window.__API_BASE_URL || '').trim().replace(/\/$/, '');
+// 環境ごとにAPI_BASE_URLを自動判定
+const host = window.location.hostname;
+let API_BASE_URL = '';
+if (host.endsWith('onrender.com')) {
+  API_BASE_URL = '';
+} else if (host.endsWith('maptolist.online')) {
+  API_BASE_URL = 'https://maptolist.online';
+} else if (window.__API_BASE_URL) {
+  API_BASE_URL = String(window.__API_BASE_URL).trim().replace(/\/$/, '');
+}
 const IS_GITHUB_PAGES = window.location.hostname.endsWith('github.io');
 const IS_PLACEHOLDER_API_BASE_URL = API_BASE_URL === 'https://YOUR-BACKEND-URL';
 
