@@ -302,14 +302,6 @@
       background: rgba(83,58,253,0.05);
       border-color: #533afd;
     }
-    .hero-right {
-      flex: 0 0 400px;
-      max-width: 400px;
-      min-width: 320px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
     .login-card {
       background: #fff;
       border-radius: 6px;
@@ -363,14 +355,7 @@
         gap: 32px;
         padding: 32px 4vw 24px 4vw;
       }
-      .hero-left, .hero-right {
-        max-width: 100%;
-        min-width: 0;
-      }
-      .hero-right {
-        width: 100%;
-        flex: 1 1 0%;
-      }
+      /* .hero-left, .hero-right 削除: 1カラム化 */
     }
     @media (max-width: 600px) {
       .hero-title {
@@ -400,16 +385,14 @@
       </div>
     </header>
     <main class="hero">
-      <section class="hero-left">
+      <div class="hero-inner">
         <h1 class="hero-title">地図からリストへ。<br>営業リスト作成を、<span style="color:#533afd">もっと速く、もっと美しく</span></h1>
         <div class="hero-desc">Map to Listは、Googleマップ上の店舗・施設情報を一括でリスト化できるクラウドサービスです。<br>営業リスト作成やリサーチ業務を、誰でも直感的に、圧倒的なスピードで。</div>
         <div class="hero-cta-row">
           <a href="{{ app_base_url }}/auth/login" class="hero-cta-primary">Googleで無料ではじめる</a>
           <a href="/terms.html" class="hero-cta-ghost" target="_blank" rel="noopener">利用規約</a>
         </div>
-      </section>
-      <aside class="hero-right">
-        <div class="login-card">
+        <div class="login-card" style="margin-top:40px;">
           <div class="login-title">ログイン</div>
           <div class="login-desc">Googleアカウントでログインしてご利用ください</div>
           <a href="{{ app_base_url }}/auth/login" class="google-btn">
@@ -423,7 +406,7 @@
             Googleでログイン
           </a>
         </div>
-      </aside>
+      </div>
     </main>
     <footer style="margin-top:auto;width:100vw;text-align:center; color:#7a8ab0; font-size:13px; padding:18px 0 10px 0;">
       <a href="/terms.html" target="_blank" rel="noopener" style="color:#533afd; text-decoration:none; margin:0 10px;">利用規約</a>
