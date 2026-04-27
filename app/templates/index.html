@@ -23,7 +23,6 @@
       display: flex;
       flex-direction: column;
       min-height: 100vh;
-    /* ====== RESET & BASE ====== */
     body {
       min-height: 100vh;
       margin: 0;
@@ -39,7 +38,6 @@
       flex-direction: column;
       min-height: 100vh;
     }
-    /* ====== HEADER ====== */
     .site-header {
       padding-top: 32px;
       background: transparent;
@@ -125,24 +123,24 @@
       border-color: #533afd;
       color: #4434d4;
     }
-    /* ====== HERO ====== */
+    /* ====== HERO 1カラム中央寄せ ====== */
     .hero {
-      display: flex;
-      align-items: stretch;
-      justify-content: center;
-      flex: 1 1 auto;
-      min-height: 72vh;
-      max-width: 1080px;
-      margin: 0 auto;
-      padding: 32px 16px 32px 16px;
-      gap: 48px;
-    }
-    .hero-left {
-      flex: 1 1 0%;
-      min-width: 0;
+      width: 100%;
       display: flex;
       flex-direction: column;
+      align-items: center;
       justify-content: center;
+      padding: 56px 16px 40px 16px;
+      min-height: 68vh;
+    }
+    .hero-inner {
+      width: 100%;
+      max-width: 600px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 0;
     }
     .hero-title {
       font-size: 48px;
@@ -160,11 +158,15 @@
       color: #64748d;
       margin-bottom: 36px;
       max-width: 480px;
+      margin-left: auto;
+      margin-right: auto;
     }
     .hero-cta-row {
       display: flex;
       gap: 18px;
       align-items: center;
+      justify-content: center;
+      margin-top: 18px;
     }
     .hero-cta-primary {
       background: #533afd;
@@ -204,62 +206,6 @@
       background: rgba(83,58,253,0.05);
       border-color: #533afd;
     }
-    .hero-right {
-      flex: 0 0 400px;
-      max-width: 400px;
-      min-width: 320px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .login-card {
-      background: #fff;
-      border-radius: 6px;
-      box-shadow: rgba(50,50,93,0.25) 0 30px 45px -30px, rgba(0,0,0,0.1) 0 18px 36px -18px;
-      padding: 40px 32px 32px 32px;
-      width: 100%;
-      text-align: center;
-      border: 1px solid #e5edf5;
-    }
-    .login-title {
-      font-size: 22px;
-      font-weight: 300;
-      color: #061b31;
-      font-feature-settings: "ss01" 1;
-      margin-bottom: 10px;
-    }
-    .login-desc {
-      color: #64748d;
-      font-size: 15px;
-      font-weight: 300;
-      margin-bottom: 28px;
-    }
-    .google-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      background: #fff;
-      border: 1px solid #b9b9f9;
-      border-radius: 4px;
-      font-size: 16px;
-      color: #533afd;
-      font-weight: 400;
-      font-family: inherit;
-      font-feature-settings: "ss01" 1;
-      padding: 12px 24px;
-      text-decoration: none;
-      transition: background 0.15s, border-color 0.15s;
-      cursor: pointer;
-    }
-    .google-btn:hover {
-      background: rgba(83,58,253,0.05);
-      border-color: #533afd;
-    }
-    .google-logo {
-      width: 22px;
-      height: 22px;
-    }
-    /* ====== RESPONSIVE ====== */
     @media (max-width: 900px) {
       .site-header {
         padding-top: 18px;
@@ -275,17 +221,11 @@
         margin-left: 4vw;
       }
       .hero {
-        flex-direction: column;
-        gap: 32px;
-        padding: 24px 4vw 16px 4vw;
+        padding: 32px 4vw 24px 4vw;
       }
-      .hero-left, .hero-right {
-        max-width: 100%;
-        min-width: 0;
-      }
-      .hero-right {
-        width: 100%;
-        flex: 1 1 0%;
+      .hero-title {
+        font-size: 36px;
+        letter-spacing: -0.64px;
       }
     }
     @media (max-width: 600px) {
@@ -310,18 +250,14 @@
         margin-top: 8px;
       }
       .hero {
-        flex-direction: column;
-        gap: 32px;
+        padding: 24px 2vw 16px 2vw;
       }
       .hero-title {
-        font-size: 32px;
-        letter-spacing: -0.64px;
+        font-size: 28px;
+        letter-spacing: -0.3px;
       }
       .hero-desc {
         font-size: 15px;
-      }
-      .login-card {
-        padding: 28px 8vw 20px 8vw;
       }
     }
       display: flex;
