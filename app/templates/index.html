@@ -21,7 +21,122 @@
       flex-direction: column;
       min-height: 100vh;
     }
-    .hero {
+    .logo-block {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+      margin-left: 16px;
+    }
+    .logo-text {
+      font-family: "sohne-var", "Noto Sans JP", "Segoe UI", sans-serif;
+      font-feature-settings: "ss01" 1;
+      font-size: 32px;
+      font-weight: 300;
+      letter-spacing: -0.64px;
+      color: #533afd;
+      line-height: 1.1;
+      text-shadow: 0 2px 16px rgba(83,58,253,0.08), 0 1px 0 #fff;
+      user-select: none;
+    }
+    .logo-desc {
+      font-size: 14px;
+      font-weight: 400;
+      color: #64748d;
+      margin-top: 2px;
+      letter-spacing: 0.01em;
+      font-family: "sohne-var", "Noto Sans JP", "Segoe UI", sans-serif;
+      font-feature-settings: "ss01" 1;
+      line-height: 1.2;
+      user-select: none;
+    }
+    .header-inner {
+      width: 100%;
+      max-width: 1080px;
+      margin: 0 auto;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      padding: 0 0 0 0;
+    }
+    .header-actions {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      margin-right: 16px;
+      margin-top: 2px;
+    }
+    .header-btn {
+      display: inline-block;
+      font-family: "sohne-var", "Noto Sans JP", "Segoe UI", sans-serif;
+      font-feature-settings: "ss01" 1;
+      font-size: 15px;
+      font-weight: 400;
+      border-radius: 4px;
+      padding: 10px 22px;
+      text-decoration: none;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      box-shadow: rgba(50,50,93,0.10) 0 2px 8px;
+      border: 1px solid #b9b9f9;
+      background: #fff;
+      color: #533afd;
+      letter-spacing: 0;
+      position: relative;
+    }
+    .header-btn.header-login {
+      background: #533afd;
+      color: #fff;
+      border: none;
+      box-shadow: rgba(50,50,93,0.18) 0 4px 16px -4px;
+    }
+    .header-btn.header-login:hover {
+      background: #4434d4;
+      color: #fff;
+    }
+    .header-btn.header-contact {
+      background: #fff;
+      color: #533afd;
+      border: 1px solid #b9b9f9;
+    }
+    .header-btn.header-contact:hover {
+      background: rgba(83,58,253,0.05);
+      border-color: #533afd;
+      color: #4434d4;
+    }
+    @media (max-width: 900px) {
+      .header-inner {
+        padding-left: 4vw;
+        padding-right: 4vw;
+      }
+      .header-actions {
+        margin-right: 0;
+      }
+      .logo-block {
+        margin-left: 4vw;
+      }
+    }
+    @media (max-width: 600px) {
+      .logo-text {
+        font-size: 22px;
+        letter-spacing: -0.3px;
+      }
+      .logo-desc {
+        font-size: 12px;
+      }
+      .header-btn {
+        font-size: 13px;
+        padding: 8px 12px;
+      }
+      .header-inner {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+      .header-actions {
+        justify-content: flex-end;
+        margin-top: 8px;
+      }
+    }
       display: flex;
       align-items: center;
       justify-content: center;
