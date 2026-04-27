@@ -10,6 +10,9 @@
       min-height: 100vh;
       margin: 0;
       background:
+    .site-header {
+      padding-top: 32px;
+      background: transparent;
         radial-gradient(circle at 8% -2%, rgba(249, 107, 238, 0.18), transparent 30%),
         radial-gradient(circle at 88% 0%, rgba(83, 58, 253, 0.16), transparent 34%),
         linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
@@ -114,6 +117,9 @@
       .logo-block {
         margin-left: 4vw;
       }
+      .site-header {
+        padding-top: 18px;
+      }
     }
     @media (max-width: 600px) {
       .logo-text {
@@ -141,6 +147,9 @@
       align-items: center;
       justify-content: center;
       flex: 1 1 auto;
+      .hero {
+        flex-direction: column;
+        gap: 32px;
       min-height: 80vh;
       max-width: 1080px;
       margin: 0 auto;
@@ -164,6 +173,9 @@
       margin-bottom: 18px;
     }
     .hero-desc {
+      .hero {
+        display: flex;
+        align-items: stretch;
       font-size: 18px;
       font-weight: 300;
       line-height: 1.4;
