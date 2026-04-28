@@ -5,6 +5,7 @@ import asyncio
 import base64
 import ipaddress
 import json
+import logging
 import os
 import re
 import secrets
@@ -417,8 +418,16 @@ class ProposalGenerationRequest(BaseModel):
     target_length: int = Field(280, ge=120, le=500)
 
 
+_logger = logging.getLogger(__name__)
+
+
 @app.on_event("startup")
 def startup() -> None:
+    if not os.getenv("SESSION_SECRET"):
+        _logger.warning(
+            "SESSION_SECRET が未設定です。サーバー再起動のたびに全ユーザーのセッションが無効になります。"
+            "本番環境では必ず環境変数 SESSION_SECRET を設定してください。"
+        )
     init_db()
 
 
@@ -1281,7 +1290,7 @@ def truncate_text(text: str, max_chars: int) -> str:
 
 
 def extract_visible_text_from_html(html: str) -> str:
-    sanitized = re.sub(r"<(script|style|noscript)[^>]*>.*?</\\1>", " ", str(html or ""), flags=re.IGNORECASE | re.DOTALL)
+    sanitized = re.sub(r"<(script|style|noscript)[^>]*>.*?</\1>", " ", str(html or ""), flags=re.IGNORECASE | re.DOTALL)
     stripped = re.sub(r"<[^>]+>", " ", sanitized)
     return collapse_whitespace(stripped)
 
@@ -1636,6 +1645,8 @@ def get_google_maps_key_status(user: Optional[dict[str, Any]] = Depends(get_curr
 @app.post("/api/settings/google-maps-key")
 def set_google_maps_key(payload: GoogleMapsKeyRequest, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     init_db()
+    if not user:
+        raise HTTPException(status_code=401, detail="ログインが必要です")
     key = payload.api_key.strip()
     if not key:
         raise HTTPException(status_code=400, detail="APIキーが空です")
@@ -2012,7 +2023,7 @@ def get_lead_names(request: Request, user: Optional[dict[str, Any]] = Depends(ge
 
 @app.post("/api/import/google-places")
 @limiter.limit(lambda: DEFAULT_RATE_LIMIT_PLACES)
-async def import_google_places(request: Request, payload: ImportRequest, user: Optional[dict] = None) -> dict[str, Any]:
+async def import_google_places(request: Request, payload: ImportRequest, user: Optional[dict] = Depends(get_current_user)) -> dict[str, Any]:
     if not user:
         return {"items": []}
     init_db()
@@ -2210,6 +2221,8 @@ async def send_email(request: Request, payload: ContactRequest, user: Optional[d
 @app.post("/api/contact/form")
 def send_form(request: Request, payload: ContactRequest, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     init_db()
+    if not user:
+        raise HTTPException(status_code=401, detail="ログインが必要です")
     browser_client_id = get_browser_client_id(request)
     if not payload.lead_ids:
         raise HTTPException(status_code=400, detail="対象企業を選択してください")
@@ -2307,6 +2320,8 @@ def send_form(request: Request, payload: ContactRequest, user: Optional[dict[str
 
 @app.get("/api/form-adapters")
 def list_form_adapters(user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
+    if not user:
+        raise HTTPException(status_code=401, detail="ログインが必要です")
     init_db()
     with get_connection() as conn:
         rows = conn.execute("SELECT * FROM form_adapters ORDER BY updated_at DESC").fetchall()
@@ -2315,6 +2330,8 @@ def list_form_adapters(user: Optional[dict[str, Any]] = Depends(get_current_user
 
 @app.get("/api/contact-forms")
 def list_contact_forms(request: Request, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
+    if not user:
+        raise HTTPException(status_code=401, detail="ログインが必要です")
     init_db()
     browser_client_id = get_browser_client_id(request)
     with get_connection() as conn:
@@ -2340,7 +2357,7 @@ def list_contact_forms(request: Request, user: Optional[dict[str, Any]] = Depend
 
 
 @app.post("/api/proposals/generate")
-async def generate_proposal(request: Request, payload: ProposalGenerationRequest, user: Optional[dict] = None) -> dict[str, Any]:
+async def generate_proposal(request: Request, payload: ProposalGenerationRequest, user: Optional[dict] = Depends(get_current_user)) -> dict[str, Any]:
     init_db()
     browser_client_id = get_browser_client_id(request)
 
@@ -2429,7 +2446,7 @@ async def generate_proposal(request: Request, payload: ProposalGenerationRequest
             "website": company_website,
             "context_sources": context.get("sources", []),
         },
-        actor=user.get("email", "system"),
+        actor=user.get("email", "system") if user else "system",
     )
 
     return {
@@ -2584,6 +2601,8 @@ def create_form_adapter(payload: FormAdapterRequest, user: Optional[dict[str, An
 
 @app.get("/api/suppressions")
 def list_suppressions(user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
+    if not user:
+        raise HTTPException(status_code=401, detail="ログインが必要です")
     init_db()
     with get_connection() as conn:
         rows = conn.execute("SELECT * FROM suppression_list ORDER BY created_at DESC").fetchall()
@@ -2592,6 +2611,8 @@ def list_suppressions(user: Optional[dict[str, Any]] = Depends(get_current_user)
 
 @app.post("/api/suppressions")
 def add_suppression(payload: SuppressionRequest, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
+    if not user:
+        raise HTTPException(status_code=401, detail="ログインが必要です")
     init_db()
     email = normalize_email(payload.email)
     if not EMAIL_REGEX.fullmatch(email):
@@ -2614,6 +2635,8 @@ def add_suppression(payload: SuppressionRequest, user: Optional[dict[str, Any]] 
 
 @app.delete("/api/suppressions/{email}")
 def remove_suppression(email: str, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
+    if not user:
+        raise HTTPException(status_code=401, detail="ログインが必要です")
     init_db()
     normalized = normalize_email(email)
     with get_connection() as conn:
@@ -2624,12 +2647,24 @@ def remove_suppression(email: str, user: Optional[dict[str, Any]] = Depends(get_
 
 @app.post("/api/leads/tags/bulk")
 def update_manual_tags(payload: BulkTagRequest, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
+    if not user:
+        raise HTTPException(status_code=401, detail="ログインが必要です")
     init_db()
     if not payload.lead_ids:
         raise HTTPException(status_code=400, detail="対象企業を選択してください")
 
     with get_connection() as conn:
-        for lead_id in payload.lead_ids:
+        owned_rows = conn.execute(
+            "SELECT id FROM leads WHERE id = ANY(?) AND user_id = ?",
+            (payload.lead_ids, user["id"]),
+        ).fetchall()
+        valid_lead_ids = [int(r["id"]) for r in owned_rows]
+
+        if not valid_lead_ids:
+            raise HTTPException(status_code=404, detail="対象企業が見つかりません")
+
+        now = now_iso()
+        for lead_id in valid_lead_ids:
             conn.execute(
                 """
                 INSERT INTO manual_tags (lead_id, category, industry, note, updated_at)
@@ -2640,20 +2675,23 @@ def update_manual_tags(payload: BulkTagRequest, user: Optional[dict[str, Any]] =
                     note=excluded.note,
                     updated_at=excluded.updated_at
                 """,
-                (lead_id, payload.category, payload.industry, payload.note, now_iso()),
+                (lead_id, payload.category, payload.industry, payload.note, now),
             )
             log_audit(
                 "update_manual_tag",
                 "lead",
                 str(lead_id),
                 {"category": payload.category, "industry": payload.industry, "note": payload.note},
+                actor=user["email"],
             )
 
-    return {"updated": len(payload.lead_ids)}
+    return {"updated": len(valid_lead_ids)}
 
 
 @app.get("/api/audit-logs")
 def get_audit_logs(user: Optional[dict[str, Any]] = Depends(get_current_user), limit: int = Query(50, ge=1, le=500)) -> dict[str, Any]:
+    if not user:
+        raise HTTPException(status_code=401, detail="ログインが必要です")
     init_db()
     with get_connection() as conn:
         rows = conn.execute("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()

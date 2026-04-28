@@ -609,6 +609,7 @@ function renderLeadsTable(items) {
     `,
     )
     .join('');
+}
 
 function updateLeadSortIndicators() {
   if (!leadsThead) return;
@@ -715,7 +716,6 @@ function renderLeadPreviewFromLocal() {
 }
 
 function renderMyListTable(items) {
-  myListTbody.innerHTML = items
   if (!myListTbody) return;
   myListTbody.innerHTML = items
     .map(
@@ -737,9 +737,8 @@ function renderMyListTable(items) {
 }
 
 function renderHistoryTable(items) {
-  const keyword = String(historyFilterForm?.querySelector('input[name="q"]')?.value || '').trim();
-  historyTbody.innerHTML = items
   if (!historyTbody) return;
+  const keyword = String(historyFilterForm?.querySelector('input[name="q"]')?.value || '').trim();
   historyTbody.innerHTML = items
     .map(
       (item) => `
@@ -1038,7 +1037,6 @@ function renderContactFormsTable(items) {
     `,
     )
     .join('');
-}
 }
 
 function getSelectedLeadIds() {
