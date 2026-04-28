@@ -9,12 +9,12 @@ import logging
 import os
 import re
 import secrets
-from contextlib import closing
+from contextlib import asynccontextmanager, closing
 from datetime import UTC, datetime, timedelta
 from email.mime.text import MIMEText
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Annotated, Any, Optional
+from typing import Any, Optional
 from urllib.parse import quote_plus, urljoin, urlparse
 import smtplib
 
@@ -322,7 +322,21 @@ PROPOSAL_CONTEXT_PATHS: tuple[str, ...] = (
     "/products",
 )
 
-app = FastAPI(title="Map to List Lead Collector", version="0.3.0")
+_logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):  # type: ignore[type-arg]
+    if not os.getenv("SESSION_SECRET"):
+        _logger.warning(
+            "SESSION_SECRET が未設定です。サーバー再起動のたびに全ユーザーのセッションが無効になります。"
+            "本番環境では必ず環境変数 SESSION_SECRET を設定してください。"
+        )
+    init_db()
+    yield
+
+
+app = FastAPI(title="Map to List Lead Collector", version="0.3.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, max_age=86400 * 30, https_only=False)
@@ -416,19 +430,6 @@ class ProposalGenerationRequest(BaseModel):
     sender_website: str = Field(..., min_length=1, max_length=240)
     service_description: str = Field(..., min_length=1, max_length=4000)
     target_length: int = Field(280, ge=120, le=500)
-
-
-_logger = logging.getLogger(__name__)
-
-
-@app.on_event("startup")
-def startup() -> None:
-    if not os.getenv("SESSION_SECRET"):
-        _logger.warning(
-            "SESSION_SECRET が未設定です。サーバー再起動のたびに全ユーザーのセッションが無効になります。"
-            "本番環境では必ず環境変数 SESSION_SECRET を設定してください。"
-        )
-    init_db()
 
 
 def init_db() -> None:
@@ -837,7 +838,7 @@ def scope_place_id(place_id: str, browser_client_id: str = "") -> str:
     return f"{prefix}{raw}" if client_id else raw
 
 
-def get_google_api_key(user: dict[str, Any] | None = None) -> str:
+def get_google_api_key() -> str:
     return os.getenv("GOOGLE_PLACES_API_KEY", "").strip() or os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
 
 
@@ -1407,9 +1408,9 @@ def build_vertex_proposal_prompt(
 - 相手企業の公開情報から推定される課題に触れる
 - 押し売りを避け、丁寧で具体的な提案にする
 - 最後に短いCTA（相談・打ち合わせ提案）を入れる
-- 文字数はおよそ{target_length}文字（±30文字）
+- 文字数はおよそ{safe_target}文字（±30文字）
 - 事実不明な内容は断定しない
-- 途中で文が切れず、{target_length}内で完結するようにまとめてください
+- 途中で文が切れず、{safe_target}内で完結するようにまとめてください
 - 段落や。ごとに改行する
 """.strip()
 
@@ -1633,7 +1634,7 @@ def auth_me(user: Optional[dict[str, Any]] = Depends(get_current_user)):
 @app.get("/api/settings/google-maps-key")
 def get_google_maps_key_status(user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     init_db()
-    key = get_google_api_key(user)
+    key = get_google_api_key()
     if not key:
         return {"configured": False, "masked": ""}
     return {
@@ -2099,7 +2100,7 @@ async def import_google_places(request: Request, payload: ImportRequest, user: O
 
 
 @app.get("/api/place-types")
-def list_place_types(user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
+def list_place_types() -> dict[str, Any]:
     recommended_set = set(TYPE_PRIORITY)
     items = [
         {
@@ -2565,6 +2566,8 @@ async def discover_contact_forms(request: Request, payload: LeadSelectionRequest
 
 @app.post("/api/form-adapters")
 def create_form_adapter(payload: FormAdapterRequest, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
+    if not user:
+        raise HTTPException(status_code=401, detail="ログインが必要です")
     init_db()
     domain = normalize_domain(payload.domain if payload.domain.startswith("http") else f"https://{payload.domain}")
     if not domain:
@@ -2595,7 +2598,7 @@ def create_form_adapter(payload: FormAdapterRequest, user: Optional[dict[str, An
                 now,
             ),
         )
-    log_audit("upsert_form_adapter", "adapter", domain, {"name": payload.name})
+    log_audit("upsert_form_adapter", "adapter", domain, {"name": payload.name}, actor=user["email"])
     return {"ok": True, "domain": domain}
 
 
