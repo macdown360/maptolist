@@ -2399,11 +2399,10 @@ async def generate_proposal(request: Request, payload: ProposalGenerationRequest
                 LEFT JOIN contact_form_discoveries d
                     ON d.lead_id = l.id
                     AND d.user_id = l.user_id
-                    AND COALESCE(d.browser_client_id, '') = COALESCE(l.browser_client_id, '')
-                WHERE l.id = ? AND l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
+                WHERE l.id = ? AND l.user_id = ?
                 LIMIT 1
                 """,
-                (payload.lead_id, user["id"], browser_client_id),
+                (payload.lead_id, user["id"]),
             ).fetchone()
         else:
             row = conn.execute(
