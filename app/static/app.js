@@ -402,6 +402,7 @@ function switchView(viewName) {
     el.classList.toggle('active', el.id === `view-${viewName}`);
   });
 
+  if (viewName === 'leads') { hydrateLeadListState(); fetchLeads(); }
   if (viewName === 'suppression') fetchSuppressions();
   if (viewName === 'adapters') fetchAdapters();
   if (viewName === 'audit') fetchAuditLogs();
@@ -413,6 +414,7 @@ function switchView(viewName) {
 
 document.addEventListener('DOMContentLoaded', () => {
   loadUserBadge();
+
   const viewMenu = document.querySelector('#view-menu');
   if (viewMenu) {
     viewMenu.addEventListener('click', (e) => {
@@ -421,6 +423,14 @@ document.addEventListener('DOMContentLoaded', () => {
       switchView(btn.dataset.view);
     });
   }
+
+  // キャッシュをすぐに表示してから、並列でサーバーデータを取得
+  hydrateLeadListState();
+  hydrateContactFormsState();
+  Promise.all([
+    fetchLeads(),
+    fetchContactLogs(),
+  ]);
 });
 
 function escapeHtml(str) {
