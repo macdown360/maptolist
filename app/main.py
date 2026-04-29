@@ -429,7 +429,7 @@ class ProposalGenerationRequest(BaseModel):
     sender_name: str = Field(..., min_length=1, max_length=120)
     sender_website: str = Field(..., min_length=1, max_length=240)
     service_description: str = Field(..., min_length=1, max_length=4000)
-    target_length: int = Field(280, ge=120, le=500)
+    target_length: int = Field(280, ge=120, le=1000)
 
 
 def init_db() -> None:
@@ -1452,7 +1452,7 @@ def build_vertex_proposal_prompt(
     service_description: str,
     target_length: int,
 ) -> str:
-    safe_target = max(120, min(500, int(target_length)))
+    safe_target = max(120, min(1000, int(target_length)))
     return f"""
 あなたは日本語のB2B営業提案文作成の専門家です。
 次の情報を使い、問い合わせフォームに送る提案文を1本作成してください。
@@ -2503,7 +2503,7 @@ async def generate_proposal(request: Request, payload: ProposalGenerationRequest
     sender_company = payload.sender_company.strip()
     sender_name = payload.sender_name.strip()
     service_description = payload.service_description.strip()
-    target_length = max(120, min(500, int(payload.target_length)))
+    target_length = max(120, min(1000, int(payload.target_length)))
 
     async with httpx.AsyncClient(timeout=15, headers={"User-Agent": "maptolist-proposal-bot/1.0"}) as client:
         context = await gather_company_website_context(client, company_website)
