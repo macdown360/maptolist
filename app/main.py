@@ -2410,7 +2410,7 @@ def list_form_adapters(user: Optional[dict[str, Any]] = Depends(get_current_user
 @app.get("/api/contact-forms")
 def list_contact_forms(request: Request, user: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     if not user:
-        raise HTTPException(status_code=401, detail="ログインが必要です")
+        return {"items": [], "count": 0}
     init_db()
     browser_client_id = get_browser_client_id(request)
     with get_connection() as conn:
