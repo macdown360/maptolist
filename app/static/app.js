@@ -1,10 +1,15 @@
 
 // --- サイドバー開閉トグル ---
 document.addEventListener('DOMContentLoaded', function () {
+  const appShell = document.querySelector('.app-shell');
   const sidebarToggle = document.getElementById('sidebar-toggle');
-  if (sidebarToggle) {
+  if (appShell && sidebarToggle) {
+    if (localStorage.getItem('sidebarClosed') === '1') {
+      appShell.classList.add('sidebar-closed');
+    }
     sidebarToggle.addEventListener('click', function () {
-      document.body.classList.toggle('sidebar-closed');
+      appShell.classList.toggle('sidebar-closed');
+      localStorage.setItem('sidebarClosed', appShell.classList.contains('sidebar-closed') ? '1' : '0');
     });
   }
 });
