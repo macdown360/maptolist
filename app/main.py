@@ -609,6 +609,18 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS guest_daily_usage (
+                browser_client_id TEXT NOT NULL,
+                action TEXT NOT NULL,
+                day TEXT NOT NULL,
+                count INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (browser_client_id, action, day)
+            )
+            """
+        )
         try:
             conn.execute("ALTER TABLE contact_form_discoveries ADD COLUMN email TEXT NOT NULL DEFAULT ''")
         except Exception:
@@ -669,6 +681,45 @@ def record_fetch_usage(user_id: int, count: int) -> None:
     except Exception:
         # 既存環境のスキーマ差異で失敗しても本処理は継続させる
         return
+
+
+# ゲスト制限
+GUEST_IMPORT_DAILY_LIMIT = 1   # 1日1回まで
+GUEST_IMPORT_MAX = 5            # 1回最大5件
+GUEST_DISCOVER_MAX = 5          # フォーム探索最大5件
+GUEST_PROPOSAL_DAILY_LIMIT = 1  # 提案文生成1日1回まで
+
+
+def get_guest_daily_count(browser_client_id: str, action: str) -> int:
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    try:
+        with get_connection() as conn:
+            row = conn.execute(
+                "SELECT count FROM guest_daily_usage WHERE browser_client_id = ? AND action = ? AND day = ?",
+                (browser_client_id, action, today),
+            ).fetchone()
+        return int(row[0]) if row else 0
+    except Exception:
+        return 0
+
+
+def increment_guest_daily_count(browser_client_id: str, action: str) -> None:
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    ts = now_iso()
+    try:
+        with get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO guest_daily_usage (browser_client_id, action, day, count, updated_at)
+                VALUES (?, ?, ?, 1, ?)
+                ON CONFLICT (browser_client_id, action, day) DO UPDATE SET
+                    count = guest_daily_usage.count + 1,
+                    updated_at = excluded.updated_at
+                """,
+                (browser_client_id, action, today, ts),
+            )
+    except Exception:
+        pass
 
 
 def clean_address_text(raw_value: str) -> str:
@@ -1560,18 +1611,16 @@ async def discover_contact_form_url(client: httpx.AsyncClient, website: str) -> 
 
 
 
-# / : 常にトップページ（index.html）
+# / : ゲスト・ログイン問わずSPA本体を返す
 @app.get("/", response_class=HTMLResponse)
 def landing(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("index.html", {"request": request, "app_base_url": APP_BASE_URL})
+    user = get_current_user(request)
+    return templates.TemplateResponse("app.html", {"request": request, "user": user, "app_base_url": APP_BASE_URL})
 
-# /app : ログイン済みならSPA本体、未ログインなら/へリダイレクト
+# /app : / へリダイレクト（後方互換）
 @app.get("/app", response_class=HTMLResponse)
 def app_index(request: Request) -> HTMLResponse:
-    user = get_current_user(request)
-    if not user:
-        return RedirectResponse("/")
-    return templates.TemplateResponse("app.html", {"request": request, "user": user, "app_base_url": APP_BASE_URL})
+    return RedirectResponse("/")
 
 # 利用規約ページ
 @app.get("/terms.html", response_class=HTMLResponse)
@@ -2045,18 +2094,17 @@ def get_lead_names(request: Request, user: Optional[dict[str, Any]] = Depends(ge
 @app.post("/api/import/google-places")
 @limiter.limit(lambda: DEFAULT_RATE_LIMIT_PLACES)
 async def import_google_places(request: Request, payload: ImportRequest, user: Optional[dict] = Depends(get_current_user)) -> dict[str, Any]:
-    if not user:
-        return {"items": []}
     init_db()
-    adopt_orphan_leads(int(user["id"]))
     browser_client_id = get_browser_client_id(request)
     api_key = get_google_api_key()
     if not api_key:
         raise HTTPException(status_code=400, detail="Google Places APIキーがサーバーに設定されていません。")
 
-    # ---- 取得件数上限チェック ----
     user_id = int(user["id"]) if user else None
+
+    # ---- 取得件数上限チェック ----
     if user_id:
+        adopt_orphan_leads(user_id)
         daily_used = get_daily_fetch_usage(user_id)
         monthly_used = get_monthly_fetch_usage(user_id)
         daily_remaining = max(0, FETCH_LIMIT_DAILY - daily_used)
@@ -2073,8 +2121,16 @@ async def import_google_places(request: Request, payload: ImportRequest, user: O
             )
         effective_max = min(payload.max_results, daily_remaining, monthly_remaining)
     else:
-        # 未ログイン時は最大10件まで
-        effective_max = min(payload.max_results, 10)
+        # ゲスト: 1日1回・最大5件
+        if not browser_client_id:
+            raise HTTPException(status_code=400, detail="ブラウザIDが取得できません。ページを再読み込みしてください。")
+        guest_used = get_guest_daily_count(browser_client_id, "import")
+        if guest_used >= GUEST_IMPORT_DAILY_LIMIT:
+            raise HTTPException(
+                status_code=429,
+                detail=f"ゲストの本日の取得回数上限（{GUEST_IMPORT_DAILY_LIMIT}回）に達しました。ログインすると制限なくご利用いただけます。"
+            )
+        effective_max = min(payload.max_results, GUEST_IMPORT_MAX)
 
     query = payload.query.strip()
     if payload.region.strip():
@@ -2092,9 +2148,10 @@ async def import_google_places(request: Request, payload: ImportRequest, user: O
         place_type=place_type,
     )
 
-    # 実際に取得した件数を記録
     if user_id:
         record_fetch_usage(user_id, len(items))
+    else:
+        increment_guest_daily_count(browser_client_id, "import")
 
     saved = 0
     added = 0
@@ -2102,21 +2159,22 @@ async def import_google_places(request: Request, payload: ImportRequest, user: O
     for item in items:
         item["place_id"] = scope_place_id(item.get("place_id", ""), browser_client_id)
         item["browser_client_id"] = browser_client_id
-        created = upsert_lead(item, user_id=user["id"], browser_client_id=browser_client_id)
+        created = upsert_lead(item, user_id=user_id, browser_client_id=browser_client_id)
         if created:
             added += 1
         else:
             updated += 1
         saved += 1
 
-    log_audit(
-        "import_google_places",
-        "lead",
-        "bulk",
-        {"query": query, "place_type": place_type, "saved": saved, "added": added, "updated": updated},
-        actor=user["email"],
-    )
-    return {"imported": saved, "added": added, "updated": updated, "total_fetched": len(items), "items": items}
+    if user_id and user:
+        log_audit(
+            "import_google_places",
+            "lead",
+            "bulk",
+            {"query": query, "place_type": place_type, "saved": saved, "added": added, "updated": updated},
+            actor=user["email"],
+        )
+    return {"imported": saved, "added": added, "updated": updated, "total_fetched": len(items), "items": items, "is_guest": not bool(user_id)}
 
 
 @app.get("/api/place-types")
@@ -2382,6 +2440,17 @@ async def generate_proposal(request: Request, payload: ProposalGenerationRequest
     init_db()
     browser_client_id = get_browser_client_id(request)
 
+    # ゲスト: 1日1回まで
+    if not user:
+        if not browser_client_id:
+            raise HTTPException(status_code=400, detail="ブラウザIDが取得できません。ページを再読み込みしてください。")
+        guest_used = get_guest_daily_count(browser_client_id, "proposal")
+        if guest_used >= GUEST_PROPOSAL_DAILY_LIMIT:
+            raise HTTPException(
+                status_code=429,
+                detail=f"ゲストの本日の提案文生成回数上限（{GUEST_PROPOSAL_DAILY_LIMIT}回）に達しました。ログインするとさらにご利用いただけます。"
+            )
+
     with get_connection() as conn:
         if user:
             row = conn.execute(
@@ -2415,10 +2484,10 @@ async def generate_proposal(request: Request, payload: ProposalGenerationRequest
                     l.industry,
                     l.address
                 FROM leads l
-                WHERE l.id = ?
+                WHERE l.id = ? AND user_id IS NULL AND COALESCE(l.browser_client_id, '') = ?
                 LIMIT 1
                 """,
-                (payload.lead_id,),
+                (payload.lead_id, browser_client_id),
             ).fetchone()
 
     if not row:
@@ -2454,20 +2523,23 @@ async def generate_proposal(request: Request, payload: ProposalGenerationRequest
     proposal = await generate_proposal_with_vertex(prompt)
     clipped = truncate_proposal(proposal, target_length + 40)
 
-    log_audit(
-        "generate_proposal",
-        "lead",
-        str(payload.lead_id),
-        {
-            "lead_name": lead_name,
-            "target_length": target_length,
-            "proposal_length": len(clipped),
-            "vertex_model": VERTEX_AI_MODEL,
-            "website": company_website,
-            "context_sources": context.get("sources", []),
-        },
-        actor=user.get("email", "system") if user else "system",
-    )
+    if user:
+        log_audit(
+            "generate_proposal",
+            "lead",
+            str(payload.lead_id),
+            {
+                "lead_name": lead_name,
+                "target_length": target_length,
+                "proposal_length": len(clipped),
+                "vertex_model": VERTEX_AI_MODEL,
+                "website": company_website,
+                "context_sources": context.get("sources", []),
+            },
+            actor=user.get("email", "system"),
+        )
+    else:
+        increment_guest_daily_count(browser_client_id, "proposal")
 
     return {
         "lead_id": payload.lead_id,
@@ -2489,11 +2561,21 @@ async def discover_contact_forms(request: Request, payload: LeadSelectionRequest
     if not payload.lead_ids:
         raise HTTPException(status_code=400, detail="対象企業を選択してください")
 
+    # ゲスト: 最大5件まで
+    if not user and len(payload.lead_ids) > GUEST_DISCOVER_MAX:
+        raise HTTPException(status_code=400, detail=f"ゲストは最大{GUEST_DISCOVER_MAX}件まで選択できます。ログインすると制限が解除されます。")
+
     with get_connection() as conn:
-        rows = conn.execute(
-            "SELECT id, name, website FROM leads WHERE id = ANY(?) AND user_id = ? AND COALESCE(browser_client_id, '') = ?",
-            (payload.lead_ids, user["id"], browser_client_id),
-        ).fetchall()
+        if user:
+            rows = conn.execute(
+                "SELECT id, name, website FROM leads WHERE id = ANY(?) AND user_id = ? AND COALESCE(browser_client_id, '') = ?",
+                (payload.lead_ids, user["id"], browser_client_id),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, name, website FROM leads WHERE id = ANY(?) AND user_id IS NULL AND COALESCE(browser_client_id, '') = ?",
+                (payload.lead_ids, browser_client_id),
+            ).fetchall()
 
     leads = [dict(r) for r in rows]
     if not leads:
@@ -2527,53 +2609,55 @@ async def discover_contact_forms(request: Request, payload: LeadSelectionRequest
     found_by_lead = {int(item["lead_id"]): item for item in found_items}
     now = now_iso()
 
-    with get_connection() as conn:
-        for lead in leads:
-            lead_id = int(lead["id"])
-            item = found_by_lead.get(lead_id)
-            if not item:
+    # ログイン済みのみ結果をDBに保存
+    if user:
+        with get_connection() as conn:
+            for lead in leads:
+                lead_id = int(lead["id"])
+                item = found_by_lead.get(lead_id)
+                if not item:
+                    conn.execute(
+                        "DELETE FROM contact_form_discoveries WHERE user_id = ? AND lead_id = ? AND COALESCE(browser_client_id, '') = ?",
+                        (user["id"], lead_id, browser_client_id),
+                    )
+                    continue
+
                 conn.execute(
-                    "DELETE FROM contact_form_discoveries WHERE user_id = ? AND lead_id = ? AND COALESCE(browser_client_id, '') = ?",
-                    (user["id"], lead_id, browser_client_id),
+                    """
+                    INSERT INTO contact_form_discoveries (user_id, lead_id, website, form_url, email, browser_client_id, source, confidence, checked_at, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(user_id, lead_id) DO UPDATE SET
+                        website=excluded.website,
+                        form_url=excluded.form_url,
+                        email='',
+                        browser_client_id=excluded.browser_client_id,
+                        source=excluded.source,
+                        confidence=excluded.confidence,
+                        checked_at=excluded.checked_at,
+                        updated_at=excluded.updated_at
+                    """,
+                    (
+                        user["id"],
+                        item["lead_id"],
+                        item["website"],
+                        item["form_url"],
+                        "",
+                        browser_client_id,
+                        item["source"],
+                        item["confidence"],
+                        item["checked_at"],
+                        now,
+                        now,
+                    ),
                 )
-                continue
 
-            conn.execute(
-                """
-                INSERT INTO contact_form_discoveries (user_id, lead_id, website, form_url, email, browser_client_id, source, confidence, checked_at, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(user_id, lead_id) DO UPDATE SET
-                    website=excluded.website,
-                    form_url=excluded.form_url,
-                    email='',
-                    browser_client_id=excluded.browser_client_id,
-                    source=excluded.source,
-                    confidence=excluded.confidence,
-                    checked_at=excluded.checked_at,
-                    updated_at=excluded.updated_at
-                """,
-                (
-                    user["id"],
-                    item["lead_id"],
-                    item["website"],
-                    item["form_url"],
-                    "",
-                    browser_client_id,
-                    item["source"],
-                    item["confidence"],
-                    item["checked_at"],
-                    now,
-                    now,
-                ),
-            )
-
-    log_audit(
-        "discover_contact_forms",
-        "lead",
-        "bulk",
-        {"lead_ids": payload.lead_ids, "checked": len(leads), "found": len(found_items)},
-        actor=user["email"],
-    )
+        log_audit(
+            "discover_contact_forms",
+            "lead",
+            "bulk",
+            {"lead_ids": payload.lead_ids, "checked": len(leads), "found": len(found_items)},
+            actor=user["email"],
+        )
 
     return {
         "checked": len(leads),

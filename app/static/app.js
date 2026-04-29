@@ -258,8 +258,7 @@ async function apiFetch(url, options = {}) {
   }
 
   if (res.status === 401) {
-    // 未ログイン時はSPAトップ（/）に留まる（API_BASE_URLへのリダイレクト禁止）
-    window.location.href = '/';
+    showToast('この機能はログインが必要です', 'error');
     return null;
   }
   return res;
@@ -270,27 +269,28 @@ async function loadUserBadge() {
   const sidebarFoot = document.getElementById('sidebar-foot');
   if (!sidebarFoot) return;
 
-
   sidebarFoot.innerHTML = '<span style="color:#b0b8c9">ユーザー情報取得中...</span>';
   let user = null;
   try {
-    const res = await apiFetch('/api/auth/me');
-    if (!res || !res.ok) throw new Error('not logged in');
-    user = await res.json();
+    const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
+      credentials: API_BASE_URL ? 'include' : 'same-origin',
+      headers: { 'X-Browser-Client-Id': getBrowserClientId() },
+    });
+    if (res && res.ok) {
+      user = await res.json();
+    }
   } catch (e) {
-    // 未ログイン: 小さめ・中央寄せのログインボタンのみ
-    sidebarFoot.innerHTML = `
-      <div style="display:flex;justify-content:center;align-items:center;padding:16px 0;">
-        <a href="${API_BASE_URL}/auth/login" style="display:inline-block;padding:7px 18px;background:#533afd;color:#fff;font-weight:600;border-radius:20px;font-size:14px;text-decoration:none;box-shadow:0 1px 4px #e5e5f7;transition:background 0.15s;">ログイン</a>
-      </div>
-    `;
-    return;
+    // ネットワークエラー: ゲストとして続行
   }
 
+  window.currentUser = user;
+
   if (!user) {
+    // ゲストモード: ログインボタン + ゲスト案内を表示
     sidebarFoot.innerHTML = `
-      <div style="display:flex;justify-content:center;align-items:center;padding:16px 0;">
-        <a href="${API_BASE_URL}/auth/login" style="display:inline-block;padding:7px 18px;background:#533afd;color:#fff;font-weight:600;border-radius:20px;font-size:14px;text-decoration:none;box-shadow:0 1px 4px #e5e5f7;transition:background 0.15s;">ログイン</a>
+      <div style="padding:12px 8px 8px 8px;">
+        <a href="${API_BASE_URL}/auth/login" style="display:block;text-align:center;padding:8px 0;background:#533afd;color:#fff;font-weight:600;border-radius:6px;font-size:14px;text-decoration:none;margin-bottom:8px;">Googleでログイン</a>
+        <div style="font-size:11px;color:#8898aa;text-align:center;line-height:1.5;">ゲストモード：1日1回・5件まで取得可<br>ログインで全機能が使えます</div>
       </div>
     `;
     return;
@@ -1833,7 +1833,7 @@ importForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
 
   const maxResultsRaw = importForm.querySelector('input[name="max_results"]')?.value ?? '';
-  const maxResultsNum = Number(maxResultsRaw);
+  let maxResultsNum = Number(maxResultsRaw);
   if (maxResultsRaw.trim() === '' || !Number.isInteger(maxResultsNum) || isNaN(maxResultsNum)) {
     importResult.textContent = 'エラー: 取得件数には数値を入力してください。';
     return;
@@ -1841,6 +1841,12 @@ importForm?.addEventListener('submit', async (e) => {
   if (maxResultsNum < 1 || maxResultsNum > 50) {
     importResult.textContent = 'エラー: 取得件数は1〜50の範囲で入力してください。';
     return;
+  }
+
+  // ゲストは最大5件まで
+  if (!window.currentUser && maxResultsNum > 5) {
+    maxResultsNum = 5;
+    showToast('ゲストモードでは最大5件まで取得できます', 'info');
   }
 
   setBusyStatusWithCat(importResult, '取得中...');
