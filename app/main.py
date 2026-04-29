@@ -1290,6 +1290,26 @@ def truncate_text(text: str, max_chars: int) -> str:
     return f"{value[: max_chars - 1]}…"
 
 
+def truncate_proposal(text: str, max_chars: int) -> str:
+    """提案文用: 改行を保持し、句点・感嘆符・疑問符で文を完結させて切り捨てる。"""
+    if not text or max_chars <= 0:
+        return text or ""
+    if len(text) <= max_chars:
+        return text
+    # max_chars 以内で最後の文末記号を探す
+    sentence_end = re.compile(r"[。！？!?]")
+    candidate = text[:max_chars]
+    matches = list(sentence_end.finditer(candidate))
+    if matches:
+        cut = matches[-1].end()
+        return text[:cut]
+    # 句点が見つからない場合は改行で区切る
+    newline_pos = candidate.rfind("\n")
+    if newline_pos > max_chars // 2:
+        return text[:newline_pos]
+    return candidate
+
+
 def extract_visible_text_from_html(html: str) -> str:
     sanitized = re.sub(r"<(script|style|noscript)[^>]*>.*?</\1>", " ", str(html or ""), flags=re.IGNORECASE | re.DOTALL)
     stripped = re.sub(r"<[^>]+>", " ", sanitized)
@@ -2433,7 +2453,7 @@ async def generate_proposal(request: Request, payload: ProposalGenerationRequest
     )
 
     proposal = await generate_proposal_with_vertex(prompt)
-    clipped = truncate_text(proposal, target_length + 40)
+    clipped = truncate_proposal(proposal, target_length + 40)
 
     log_audit(
         "generate_proposal",
