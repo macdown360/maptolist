@@ -57,7 +57,7 @@ const prefectureSelect = document.querySelector('select[name="prefecture"]');
 const citySelect = document.querySelector('select[name="city"]');
 const placeTypeSelect = document.querySelector('#place-type-select');
 const placeTypeFilterInput = document.querySelector('#place-type-filter');
-const importQueryInput = document.querySelector('#import-form input[name="query"]');
+const importQueryInput = document.querySelector('#import-form [name="query"]');
 const myListStatusSelect = document.querySelector('#my-list-filter-form select[name="status"]');
 const myListPriorityFilterSelect = document.querySelector('#my-list-filter-form select[name="priority"]');
 const historyTimeline = document.querySelector('#history-timeline');
@@ -1831,10 +1831,17 @@ if (placeTypeFilterInput) {
 
 document.querySelectorAll('.quick-tag').forEach(tag => {
   tag.addEventListener('click', () => {
-    const queryInput = importForm?.querySelector('input[name="query"]');
+    const queryInput = importForm?.querySelector('[name="query"]');
     if (queryInput) queryInput.value = tag.dataset.query || '';
     importForm?.requestSubmit();
   });
+});
+
+importQueryInput?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    importForm?.requestSubmit();
+  }
 });
 
 importForm?.addEventListener('submit', async (e) => {

@@ -1726,7 +1726,7 @@ textarea:focus-visible {
 
 .g-foot {
   width: 100%;
-  max-width: 700px;
+  max-width: 520px;
   margin: 0 auto;
 }
 
@@ -1735,30 +1735,31 @@ textarea:focus-visible {
 }
 
 .import-search-bar {
-  display: flex;
-  align-items: stretch;
-  border: 1.5px solid #d6d9fc;
-  border-radius: 16px;
+  position: relative;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 20px;
   background: #ffffff;
-  box-shadow: 0 2px 16px rgba(83,58,253,0.10), 0 1px 4px rgba(0,0,0,0.06);
-  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04);
   transition: border-color 0.2s, box-shadow 0.2s;
+  padding: 20px 20px 64px 22px;
 }
 
 .import-search-bar:focus-within {
-  border-color: #533afd;
-  box-shadow: 0 2px 24px rgba(83,58,253,0.20);
+  border-color: #c0c0c0;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12);
 }
 
 .import-search-input {
-  flex: 1;
+  width: 100%;
   border: none;
   border-radius: 0;
-  padding: 20px 22px;
+  padding: 0;
   font-size: 16px;
+  line-height: 1.7;
   background: transparent;
   color: var(--text);
-  min-width: 0;
+  resize: none;
+  min-height: 72px;
 }
 
 .import-search-input:focus {
@@ -1766,19 +1767,28 @@ textarea:focus-visible {
   border-color: transparent;
 }
 
+.import-search-input::placeholder {
+  color: #a0aec0;
+}
+
 .import-search-btn {
-  flex-shrink: 0;
-  border-radius: 0 14px 14px 0;
-  padding: 20px 30px;
-  font-size: 15px;
-  font-weight: 500;
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: #533afd;
   color: #fff;
   box-shadow: none;
   border: none;
   cursor: pointer;
-  white-space: nowrap;
-  letter-spacing: 0;
+  flex-shrink: 0;
+  transition: background 0.15s;
 }
 
 .import-search-btn:hover {
@@ -1788,8 +1798,48 @@ textarea:focus-visible {
   box-shadow: none;
 }
 
+.import-search-btn:active {
+  transform: none;
+  filter: none;
+}
+
+.g-chips {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.quick-tag {
+  background: #f3f4f6;
+  color: #374151;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: none;
+  font-weight: 400;
+  letter-spacing: 0;
+  transition: background 0.15s;
+}
+
+.quick-tag:hover {
+  background: #e5e7eb;
+  filter: none;
+  transform: none;
+  box-shadow: none;
+}
+
+.quick-tag:active {
+  background: #d1d5db;
+  filter: none;
+  transform: none;
+  box-shadow: none;
+}
+
 .import-result-msg {
-  margin-top: 20px;
+  margin-top: 16px;
   font-size: 14px;
   text-align: center;
 }
@@ -1808,14 +1858,13 @@ textarea:focus-visible {
     padding: 0 16px 32px;
   }
 
-  .import-search-input {
-    padding: 16px 16px;
-    font-size: 15px;
+  .import-search-bar {
+    padding: 16px 16px 60px 18px;
+    border-radius: 16px;
   }
 
-  .import-search-btn {
-    padding: 16px 20px;
-    font-size: 14px;
+  .import-search-input {
+    font-size: 15px;
   }
 
   .quick-tag {
