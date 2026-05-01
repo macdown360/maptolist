@@ -56,27 +56,24 @@
 			</header>
 
 			<section class="view active" id="view-import">
-				<div class="search-hero">
-					<h3 class="search-hero-title">業界・業種・エリアを指定して、<br class="search-hero-br">企業リストを一括取得</h3>
-					<p class="search-hero-desc">Googleマップのデータをもとに、営業リストをすぐに作成できます。<br>まずは下のキーワードを試してみてください。</p>
-					<div class="example-chips">
-						<span class="example-chips-label">試してみる →</span>
-						<button type="button" class="example-chip" data-query="税理士" data-region="新宿区">税理士 × 新宿区</button>
-						<button type="button" class="example-chip" data-query="カフェ" data-region="渋谷区">カフェ × 渋谷区</button>
-						<button type="button" class="example-chip" data-query="自動車整備工場" data-region="横浜市">整備工場 × 横浜市</button>
-						<button type="button" class="example-chip" data-query="不動産" data-region="名古屋市">不動産 × 名古屋市</button>
-						<button type="button" class="example-chip" data-query="美容室" data-region="大阪市">美容室 × 大阪市</button>
-					</div>
-				</div>
-				<div class="panel">
-					<h3 class="import-form-title">キーワードと地域を入力して検索</h3>
-					<form id="import-form" class="form-grid">
-						<label>キーワード<input name="query" required placeholder="例: 税理士 / カフェ / 自動車整備 / 不動産" /></label>
-						<label>地域<input name="region" placeholder="例: 新宿区 / 横浜市 / 大阪府" /></label>
-						<label>取得件数<input type="number" name="max_results" min="1" max="50" value="20" /> <span class="field-note">{% if user %}1回につき50件・1日200件・月1,000件まで{% else %}ゲスト：1回5件・1日1回まで。ログインで制限解除{% endif %}</span></label>
-						<button type="submit">リストを取得する</button>
+				<div class="import-hero">
+					<h2 class="import-hero-headline">営業リストを、<br>検索するだけで。</h2>
+					<form id="import-form" class="import-search-form">
+						<input type="hidden" name="region" value="">
+						<input type="hidden" name="max_results" value="20">
+						<div class="import-search-bar">
+							<input name="query" required placeholder="エリアと業種を入力…　例: 港区のIT企業" class="import-search-input" autocomplete="off" spellcheck="false" />
+							<button type="submit" class="import-search-btn">リストを取得</button>
+						</div>
 					</form>
-					<p id="import-result" class="muted"></p>
+					<div class="import-quick-tags">
+						<button type="button" class="quick-tag" data-query="港区のIT企業">港区のIT企業</button>
+						<button type="button" class="quick-tag" data-query="渋谷の美容室">渋谷の美容室</button>
+						<button type="button" class="quick-tag" data-query="新宿区の税理士">新宿区の税理士</button>
+						<button type="button" class="quick-tag" data-query="横浜の整備工場">横浜の整備工場</button>
+						<button type="button" class="quick-tag" data-query="大阪の不動産">大阪の不動産</button>
+					</div>
+					<p id="import-result" class="muted import-result-msg"></p>
 				</div>
 			</section>
 
