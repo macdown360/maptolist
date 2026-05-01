@@ -1654,11 +1654,12 @@ textarea:focus-visible {
   align-items: center;
   justify-content: center;
   padding: 24px;
+  padding-bottom: 20vh;
 }
 
 .g-center {
   width: 100%;
-  max-width: 580px;
+  max-width: 720px;
   display: flex;
   flex-direction: column;
   align-items: center;
