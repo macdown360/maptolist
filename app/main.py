@@ -1732,7 +1732,7 @@ def set_google_maps_key(payload: GoogleMapsKeyRequest, user: Optional[dict[str, 
 @app.get("/api/leads")
 def get_leads(
     request: Request,
-    user: Optional[dict] = None,
+    user: Optional[dict[str, Any]] = Depends(get_current_user),
     q: str = Query("", description="会社名や住所で検索"),
     prefecture: str = Query("", description="都道府県フィルタ"),
     city: str = Query("", description="市区町村フィルタ"),
