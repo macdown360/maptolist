@@ -3,15 +3,37 @@
 document.addEventListener('DOMContentLoaded', function () {
   const appShell = document.querySelector('.app-shell');
   const sidebarToggle = document.getElementById('sidebar-toggle');
-  if (appShell && sidebarToggle) {
-    if (localStorage.getItem('sidebarClosed') === '1') {
-      appShell.classList.add('sidebar-closed');
-    }
-    sidebarToggle.addEventListener('click', function () {
-      appShell.classList.toggle('sidebar-closed');
-      localStorage.setItem('sidebarClosed', appShell.classList.contains('sidebar-closed') ? '1' : '0');
-    });
+  if (!appShell || !sidebarToggle) return;
+
+  const isMobile = () => window.innerWidth <= 768;
+
+  // モバイルは常に閉じた状態からスタート、デスクトップはlocalStorageに従う
+  if (isMobile() || localStorage.getItem('sidebarClosed') === '1') {
+    appShell.classList.add('sidebar-closed');
   }
+
+  // バックドロップを動的に追加
+  const backdrop = document.createElement('div');
+  backdrop.className = 'sidebar-backdrop';
+  appShell.appendChild(backdrop);
+
+  function closeSidebar() {
+    appShell.classList.add('sidebar-closed');
+  }
+  function toggleSidebar() {
+    appShell.classList.toggle('sidebar-closed');
+    if (!isMobile()) {
+      localStorage.setItem('sidebarClosed', appShell.classList.contains('sidebar-closed') ? '1' : '0');
+    }
+  }
+
+  backdrop.addEventListener('click', closeSidebar);
+  sidebarToggle.addEventListener('click', toggleSidebar);
+
+  // モバイルでメニュー項目をタップしたらサイドバーを閉じる
+  document.getElementById('view-menu')?.addEventListener('click', (e) => {
+    if (e.target.closest('.menu-item') && isMobile()) closeSidebar();
+  });
 });
 // --- hydrateMyListFilterFromUrl: グローバル定義 ---
 
