@@ -50,16 +50,14 @@
 
 			<section class="view active" id="view-import">
 				<div class="g-layout">
-					<div class="g-body">
+					<div class="g-center">
 						<h1 class="g-greeting">{% if user %}こんにちは、<span class="g-name">{{ user.name }}</span>さん{% else %}こんにちは{% endif %}</h1>
 						<p class="g-sub">何の営業リストを取得しますか？</p>
-					</div>
-					<div class="g-foot">
 						<form id="import-form" class="import-search-form">
 							<input type="hidden" name="region" value="">
 							<input type="hidden" name="max_results" value="20">
 							<div class="import-search-bar">
-								<textarea name="query" required rows="3" placeholder="エリアと業種を入力…&#10;例: 港区のIT企業、渋谷の美容室" class="import-search-input" autocomplete="off" spellcheck="false"></textarea>
+								<textarea name="query" required rows="2" placeholder="エリアと業種を入力…　例: 港区のIT企業" class="import-search-input" autocomplete="off" spellcheck="false"></textarea>
 								<button type="submit" class="import-search-btn" aria-label="リストを取得">
 									<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
 										<path d="M9 3L9 15M9 3L4 8M9 3L14 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>

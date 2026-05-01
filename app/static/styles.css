@@ -1647,22 +1647,21 @@ textarea:focus-visible {
   }
 }
 
-/* ── Gemini-like import layout ── */
+/* ── Import page (Claude-like) ── */
 .g-layout {
   display: flex;
-  flex-direction: column;
   flex: 1;
-  padding: 0 24px 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
 }
 
-.g-body {
-  flex: 1;
+.g-center {
+  width: 100%;
+  max-width: 580px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding-bottom: 5vh;
-  gap: 0;
 }
 
 .g-greeting {
@@ -1683,51 +1682,10 @@ textarea:focus-visible {
 }
 
 .g-sub {
-  margin: 0 0 36px;
-  font-size: 16px;
+  margin: 0 0 28px;
+  font-size: 15px;
   color: var(--muted);
   text-align: center;
-}
-
-.g-chips {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.quick-tag {
-  background: transparent;
-  color: #533afd;
-  border: 1px solid #b9b9f9;
-  border-radius: 999px;
-  padding: 8px 18px;
-  font-size: 13px;
-  cursor: pointer;
-  box-shadow: none;
-  font-weight: 400;
-  letter-spacing: 0;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.quick-tag:hover {
-  background: rgba(83,58,253,0.06);
-  border-color: #8b81f8;
-  filter: none;
-  transform: none;
-  box-shadow: none;
-}
-
-.quick-tag:active {
-  filter: none;
-  transform: none;
-  box-shadow: none;
-}
-
-.g-foot {
-  width: 100%;
-  max-width: 520px;
-  margin: 0 auto;
 }
 
 .import-search-form {
@@ -1741,7 +1699,7 @@ textarea:focus-visible {
   background: #ffffff;
   box-shadow: 0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04);
   transition: border-color 0.2s, box-shadow 0.2s;
-  padding: 20px 20px 64px 22px;
+  padding: 16px 16px 56px 18px;
 }
 
 .import-search-bar:focus-within {
@@ -1759,7 +1717,7 @@ textarea:focus-visible {
   background: transparent;
   color: var(--text);
   resize: none;
-  min-height: 72px;
+  min-height: 52px;
 }
 
 .import-search-input:focus {
@@ -1773,10 +1731,10 @@ textarea:focus-visible {
 
 .import-search-btn {
   position: absolute;
-  bottom: 14px;
-  right: 14px;
-  width: 38px;
-  height: 38px;
+  bottom: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   padding: 0;
   display: flex;
@@ -1808,6 +1766,8 @@ textarea:focus-visible {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
 }
 
 .quick-tag {
@@ -1842,24 +1802,26 @@ textarea:focus-visible {
   margin-top: 16px;
   font-size: 14px;
   text-align: center;
+  width: 100%;
 }
 
 @media (max-width: 640px) {
+  .g-layout {
+    padding: 16px;
+    align-items: flex-start;
+    padding-top: 10vh;
+  }
+
   .g-greeting {
     font-size: 28px;
   }
 
   .g-sub {
     font-size: 14px;
-    margin-bottom: 24px;
-  }
-
-  .g-layout {
-    padding: 0 16px 32px;
+    margin-bottom: 20px;
   }
 
   .import-search-bar {
-    padding: 16px 16px 60px 18px;
     border-radius: 16px;
   }
 
