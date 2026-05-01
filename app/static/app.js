@@ -1829,6 +1829,17 @@ if (placeTypeFilterInput) {
   placeTypeFilterInput.addEventListener('input', applyPlaceTypeFilter);
 }
 
+document.querySelectorAll('.example-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    const queryInput = importForm?.querySelector('input[name="query"]');
+    const regionInput = importForm?.querySelector('input[name="region"]');
+    if (queryInput) queryInput.value = chip.dataset.query || '';
+    if (regionInput) regionInput.value = chip.dataset.region || '';
+    importForm?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    importForm?.requestSubmit();
+  });
+});
+
 importForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
 

@@ -56,13 +56,25 @@
 			</header>
 
 			<section class="view active" id="view-import">
+				<div class="search-hero">
+					<h3 class="search-hero-title">業界・業種・エリアを指定して、<br class="search-hero-br">企業リストを一括取得</h3>
+					<p class="search-hero-desc">Googleマップのデータをもとに、営業リストをすぐに作成できます。<br>まずは下のキーワードを試してみてください。</p>
+					<div class="example-chips">
+						<span class="example-chips-label">試してみる →</span>
+						<button type="button" class="example-chip" data-query="税理士" data-region="新宿区">税理士 × 新宿区</button>
+						<button type="button" class="example-chip" data-query="カフェ" data-region="渋谷区">カフェ × 渋谷区</button>
+						<button type="button" class="example-chip" data-query="自動車整備工場" data-region="横浜市">整備工場 × 横浜市</button>
+						<button type="button" class="example-chip" data-query="不動産" data-region="名古屋市">不動産 × 名古屋市</button>
+						<button type="button" class="example-chip" data-query="美容室" data-region="大阪市">美容室 × 大阪市</button>
+					</div>
+				</div>
 				<div class="panel">
-					<h3>業種や業界、業態やエリアなどを掛け合わせて検索してください</h3>
+					<h3 class="import-form-title">キーワードと地域を入力して検索</h3>
 					<form id="import-form" class="form-grid">
-						<label>キーワード<input name="query" required placeholder="例: 税理士 / カフェ / 自動車整備 / 不動産 東京" /></label>
-						<label>地域<input name="region" placeholder="新宿区や沼津市など市区町村単位で指定すると検索時間が短くなります" /></label>
-						<label>取得件数<input type="number" name="max_results" min="1" max="50" value="20" /> <span class="field-note">{% if user %}取得できるデータ件数は1回につき50件まで、1日につき200件まで、1ヶ月につき1,000件までとなります。{% else %}ゲスト：1回につき5件まで・1日1回まで。ログインすると制限が解除されます。{% endif %}</span></label>
-						<button type="submit">取得開始</button>
+						<label>キーワード<input name="query" required placeholder="例: 税理士 / カフェ / 自動車整備 / 不動産" /></label>
+						<label>地域<input name="region" placeholder="例: 新宿区 / 横浜市 / 大阪府" /></label>
+						<label>取得件数<input type="number" name="max_results" min="1" max="50" value="20" /> <span class="field-note">{% if user %}1回につき50件・1日200件・月1,000件まで{% else %}ゲスト：1回5件・1日1回まで。ログインで制限解除{% endif %}</span></label>
+						<button type="submit">リストを取得する</button>
 					</form>
 					<p id="import-result" class="muted"></p>
 				</div>
