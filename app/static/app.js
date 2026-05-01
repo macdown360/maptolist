@@ -1851,13 +1851,38 @@ if (placeTypeFilterInput) {
   placeTypeFilterInput.addEventListener('input', applyPlaceTypeFilter);
 }
 
-document.querySelectorAll('.quick-tag').forEach(tag => {
-  tag.addEventListener('click', () => {
-    const queryInput = importForm?.querySelector('[name="query"]');
-    if (queryInput) queryInput.value = tag.dataset.query || '';
-    importForm?.requestSubmit();
+const ALL_QUICK_TAGS = [
+  '港区のIT企業', '渋谷の美容室', '新宿区の税理士', '横浜の整備工場', '大阪の不動産',
+  '名古屋の歯科医院', '福岡の飲食店', '札幌の建設会社', '仙台の整体院', '京都の旅館',
+  '千代田区の法律事務所', '品川区の医療クリニック', '世田谷区のカフェ', '渋谷の広告代理店', '中央区の会計事務所',
+  '神戸の美容クリニック', '広島の製造業', '埼玉の物流会社', '千葉の農業法人', '静岡のホテル',
+  '新宿のフィットネスジム', '池袋の学習塾', '大阪の薬局', '横浜のITコンサルタント', '名古屋の印刷会社',
+  '福岡の保険代理店', '沖縄の観光業', '金沢のホテル旅館', '岡山の工務店', '熊本の農協',
+  '渋谷のデザイン事務所', '港区のコンサルティング', '新宿の不動産', '大阪のWeb制作', '東京の人材会社',
+];
+
+function renderQuickTags() {
+  const container = document.getElementById('quick-tags-container');
+  if (!container) return;
+  const shuffled = [...ALL_QUICK_TAGS].sort(() => Math.random() - 0.5);
+  const selected = shuffled.slice(0, 5);
+  container.innerHTML = '';
+  selected.forEach(label => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'quick-tag';
+    btn.dataset.query = label;
+    btn.textContent = label;
+    btn.addEventListener('click', () => {
+      const queryInput = importForm?.querySelector('[name="query"]');
+      if (queryInput) queryInput.value = label;
+      importForm?.requestSubmit();
+    });
+    container.appendChild(btn);
   });
-});
+}
+
+renderQuickTags();
 
 importQueryInput?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
