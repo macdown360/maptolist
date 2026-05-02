@@ -623,16 +623,10 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION")
+        conn.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION")
         try:
-            conn.execute("ALTER TABLE leads ADD COLUMN latitude DOUBLE PRECISION")
-        except Exception:
-            pass
-        try:
-            conn.execute("ALTER TABLE leads ADD COLUMN longitude DOUBLE PRECISION")
-        except Exception:
-            pass
-        try:
-            conn.execute("ALTER TABLE contact_form_discoveries ADD COLUMN email TEXT NOT NULL DEFAULT ''")
+            conn.execute("ALTER TABLE contact_form_discoveries ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''")
         except Exception:
             # 既存環境ではカラム追加済みの場合がある
             pass
