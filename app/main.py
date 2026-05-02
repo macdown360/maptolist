@@ -691,7 +691,7 @@ def record_fetch_usage(user_id: int, count: int) -> None:
 GUEST_IMPORT_DAILY_LIMIT = 3   # 1日3回まで
 GUEST_IMPORT_MAX = 5            # 1回最大5件
 GUEST_DISCOVER_MAX = 5          # フォーム探索最大5件
-GUEST_PROPOSAL_DAILY_LIMIT = 3  # 提案文生成1日3回まで
+GUEST_PROPOSAL_DAILY_LIMIT = 2  # 提案文生成1日2回まで
 
 
 def get_guest_daily_count(browser_client_id: str, action: str) -> int:
@@ -1483,9 +1483,10 @@ def build_vertex_proposal_prompt(
 - 相手企業の公開情報から推定される課題に触れる
 - 押し売りを避け、丁寧で具体的な提案にする
 - 最後に短いCTA（相談・打ち合わせ提案）を入れる
-- 文字数はおよそ{safe_target}文字（±30文字）
+- 文字数は{safe_target}文字以内で必ず完結させること（超過厳禁）
+- {safe_target}文字を超えないよう、文章量を事前に調整してから書くこと
 - 事実不明な内容は断定しない
-- 途中で文が切れず、{safe_target}内で完結するようにまとめてください
+- CTAの後に送信者のWebサイトURL（{sender_website}）を必ず記載する
 - 段落や。ごとに改行する
 """.strip()
 

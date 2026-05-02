@@ -1369,7 +1369,7 @@ function collectProposalPayload(lead) {
   const senderName = String(formData.get('sender_name') || '').trim();
   const senderWebsite = String(formData.get('sender_website') || '').trim();
   const serviceDescription = String(formData.get('service_description') || '').trim();
-  const targetLength = Math.min(1000, Math.max(120, Number(formData.get('target_length') || 280)));
+  const targetLength = Math.min(1000, Math.max(120, Number(formData.get('target_length') || 500)));
 
   if (!senderCompany || !senderName || !senderWebsite || !serviceDescription) {
     return null;
@@ -1403,7 +1403,7 @@ async function generateProposalForLead(lead, triggerButton = null) {
   updateProposalTargetSummary();
 
   if (triggerButton) triggerButton.disabled = true;
-  setProposalResultText('提案文を生成中です。企業サイト情報の分析とVertex AIによる文面生成を実行しています...');
+  setProposalResultText('企業サイトの情報を元に、提案文をAIが作成中です...');
 
   try {
     const res = await apiFetch('/api/proposals/generate', {
@@ -1451,7 +1451,7 @@ function updateProposalPreview() {
   const senderName = String(formData.get('sender_name') || '').trim();
   const senderWebsite = String(formData.get('sender_website') || '').trim();
   const serviceDescription = String(formData.get('service_description') || '').trim();
-  const targetLength = Math.min(1000, Math.max(120, Number(formData.get('target_length') || 280)));
+  const targetLength = Math.min(1000, Math.max(120, Number(formData.get('target_length') || 500)));
   const paragraphs = normalizeProposalParagraphs(serviceDescription);
 
   if (!senderCompany || !senderName || !senderWebsite || !serviceDescription) {
