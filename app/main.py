@@ -1817,90 +1817,110 @@ def get_leads(
             sql += " LIMIT 10"
         rows = conn.execute(sql, params).fetchall()
 
+        # ユーザースコープ条件
         if user_id:
-            categories = conn.execute(
-                """
-                SELECT DISTINCT COALESCE(mt.category, l.category) AS c
-                FROM leads l
-                LEFT JOIN manual_tags mt ON mt.lead_id = l.id
-                WHERE COALESCE(mt.category, l.category) <> '' AND l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
-                ORDER BY c
-                """
-            , (user_id, browser_client_id)).fetchall()
-            industries = conn.execute(
-                """
-                SELECT DISTINCT COALESCE(mt.industry, l.industry) AS i
-                FROM leads l
-                LEFT JOIN manual_tags mt ON mt.lead_id = l.id
-                WHERE COALESCE(mt.industry, l.industry) <> '' AND l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?
-                ORDER BY i
-                """
-            , (user_id, browser_client_id)).fetchall()
-            prefecture_rows = conn.execute(
-                """
-                SELECT DISTINCT TRIM(COALESCE(l.prefecture, '')) AS prefecture
-                FROM leads l
-                WHERE l.user_id = ? AND COALESCE(l.browser_client_id, '') = ? AND TRIM(COALESCE(l.prefecture, '')) <> ''
-                ORDER BY prefecture
-                """
-            , (user_id, browser_client_id)).fetchall()
-
-            city_where = ""
-            city_params: list[Any] = [user_id, browser_client_id]
-            if normalized_prefecture:
-                city_where = " AND TRIM(COALESCE(l.prefecture, '')) = ?"
-                city_params.append(normalized_prefecture)
-
-            city_rows = conn.execute(
-                f"""
-                SELECT DISTINCT TRIM(COALESCE(l.city, '')) AS city
-                FROM leads l
-                WHERE l.user_id = ? AND COALESCE(l.browser_client_id, '') = ? AND TRIM(COALESCE(l.city, '')) <> ''{city_where}
-                ORDER BY city
-                """
-            , tuple(city_params)).fetchall()
+            scope_where = "l.user_id = ? AND COALESCE(l.browser_client_id, '') = ?"
+            scope_params: list[Any] = [user_id, browser_client_id]
         else:
-            categories = conn.execute(
-                """
-                SELECT DISTINCT COALESCE(mt.category, l.category) AS c
-                FROM leads l
-                LEFT JOIN manual_tags mt ON mt.lead_id = l.id
-                WHERE COALESCE(mt.category, l.category) <> '' AND COALESCE(l.browser_client_id, '') = ?
-                ORDER BY c
-                """
-            , (browser_client_id,)).fetchall()
-            industries = conn.execute(
-                """
-                SELECT DISTINCT COALESCE(mt.industry, l.industry) AS i
-                FROM leads l
-                LEFT JOIN manual_tags mt ON mt.lead_id = l.id
-                WHERE COALESCE(mt.industry, l.industry) <> '' AND COALESCE(l.browser_client_id, '') = ?
-                ORDER BY i
-                """
-            , (browser_client_id,)).fetchall()
-            prefecture_rows = conn.execute(
-                """
-                SELECT DISTINCT TRIM(COALESCE(l.prefecture, '')) AS prefecture
-                FROM leads l
-                WHERE COALESCE(l.browser_client_id, '') = ? AND TRIM(COALESCE(l.prefecture, '')) <> ''
-                ORDER BY prefecture
-                """
-            , (browser_client_id,)).fetchall()
+            scope_where = "COALESCE(l.browser_client_id, '') = ?"
+            scope_params = [browser_client_id]
 
-            city_where = ""
-            city_params: list[Any] = [browser_client_id]
-            if normalized_prefecture:
-                city_where = " AND TRIM(COALESCE(l.prefecture, '')) = ?"
-                city_params.append(normalized_prefecture)
+        # 検索クエリ条件
+        q_where = ""
+        q_filter_params: list[Any] = []
+        if normalized_q:
+            q_where = " AND (l.name LIKE ? OR l.address LIKE ? OR l.website LIKE ?)"
+            like_q2 = f"%{normalized_q}%"
+            q_filter_params = [like_q2, like_q2, like_q2]
 
-            city_rows = conn.execute(
-                f"""
-                SELECT DISTINCT TRIM(COALESCE(l.city, '')) AS city
-                FROM leads l
-                WHERE COALESCE(l.browser_client_id, '') = ? AND TRIM(COALESCE(l.city, '')) <> ''{city_where}
-                ORDER BY city
-                """
-            , tuple(city_params)).fetchall()
+        # 都道府県選択肢: q・業種・業界を適用（都道府県・市区町村は除外）
+        pref_extra = q_where
+        pref_extra_params: list[Any] = list(q_filter_params)
+        if normalized_category:
+            pref_extra += " AND TRIM(COALESCE(mt.category, l.category)) = ?"
+            pref_extra_params.append(normalized_category)
+        if normalized_industry:
+            pref_extra += " AND TRIM(COALESCE(mt.industry, l.industry)) = ?"
+            pref_extra_params.append(normalized_industry)
+
+        prefecture_rows = conn.execute(
+            f"""
+            SELECT DISTINCT TRIM(COALESCE(l.prefecture, '')) AS prefecture
+            FROM leads l
+            LEFT JOIN manual_tags mt ON mt.lead_id = l.id
+            WHERE {scope_where} AND TRIM(COALESCE(l.prefecture, '')) <> ''{pref_extra}
+            ORDER BY prefecture
+            """
+        , tuple(scope_params + pref_extra_params)).fetchall()
+
+        # 市区町村選択肢: q・都道府県・業種・業界を適用（市区町村は除外）
+        city_extra = q_where
+        city_extra_params: list[Any] = list(q_filter_params)
+        if normalized_prefecture:
+            city_extra += " AND TRIM(COALESCE(l.prefecture, '')) = ?"
+            city_extra_params.append(normalized_prefecture)
+        if normalized_category:
+            city_extra += " AND TRIM(COALESCE(mt.category, l.category)) = ?"
+            city_extra_params.append(normalized_category)
+        if normalized_industry:
+            city_extra += " AND TRIM(COALESCE(mt.industry, l.industry)) = ?"
+            city_extra_params.append(normalized_industry)
+
+        city_rows = conn.execute(
+            f"""
+            SELECT DISTINCT TRIM(COALESCE(l.city, '')) AS city
+            FROM leads l
+            LEFT JOIN manual_tags mt ON mt.lead_id = l.id
+            WHERE {scope_where} AND TRIM(COALESCE(l.city, '')) <> ''{city_extra}
+            ORDER BY city
+            """
+        , tuple(scope_params + city_extra_params)).fetchall()
+
+        # 業種選択肢: q・都道府県・市区町村・業界を適用（業種は除外）
+        cat_extra = q_where
+        cat_extra_params: list[Any] = list(q_filter_params)
+        if normalized_prefecture:
+            cat_extra += " AND TRIM(COALESCE(l.prefecture, '')) = ?"
+            cat_extra_params.append(normalized_prefecture)
+        if normalized_city:
+            cat_extra += " AND TRIM(COALESCE(l.city, '')) = ?"
+            cat_extra_params.append(normalized_city)
+        if normalized_industry:
+            cat_extra += " AND TRIM(COALESCE(mt.industry, l.industry)) = ?"
+            cat_extra_params.append(normalized_industry)
+
+        categories = conn.execute(
+            f"""
+            SELECT DISTINCT COALESCE(mt.category, l.category) AS c
+            FROM leads l
+            LEFT JOIN manual_tags mt ON mt.lead_id = l.id
+            WHERE {scope_where} AND COALESCE(mt.category, l.category) <> ''{cat_extra}
+            ORDER BY c
+            """
+        , tuple(scope_params + cat_extra_params)).fetchall()
+
+        # 業界選択肢: q・都道府県・市区町村・業種を適用（業界は除外）
+        ind_extra = q_where
+        ind_extra_params: list[Any] = list(q_filter_params)
+        if normalized_prefecture:
+            ind_extra += " AND TRIM(COALESCE(l.prefecture, '')) = ?"
+            ind_extra_params.append(normalized_prefecture)
+        if normalized_city:
+            ind_extra += " AND TRIM(COALESCE(l.city, '')) = ?"
+            ind_extra_params.append(normalized_city)
+        if normalized_category:
+            ind_extra += " AND TRIM(COALESCE(mt.category, l.category)) = ?"
+            ind_extra_params.append(normalized_category)
+
+        industries = conn.execute(
+            f"""
+            SELECT DISTINCT COALESCE(mt.industry, l.industry) AS i
+            FROM leads l
+            LEFT JOIN manual_tags mt ON mt.lead_id = l.id
+            WHERE {scope_where} AND COALESCE(mt.industry, l.industry) <> ''{ind_extra}
+            ORDER BY i
+            """
+        , tuple(scope_params + ind_extra_params)).fetchall()
 
     # option_rows: 都道府県/市区町村が欠落している行だけフォールバック解析する
     option_rows: list[Any] = []
