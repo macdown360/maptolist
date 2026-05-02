@@ -1458,8 +1458,9 @@ def build_vertex_proposal_prompt(
 ) -> str:
     safe_target = max(120, min(1000, int(target_length)))
     return f"""
-あなたは日本語のB2B営業提案文作成の専門家です。
-次の情報を使い、問い合わせフォームに送る提案文を1本作成してください。
+# 目的
+- 送信先企業に対して、{company_website}の情報を踏まえた上で、{service_description}の内容がどのように役立つかを丁寧に説明する提案文を作成してください。
+- 必ず文末に、{sender_company}のサービスに興味があるかどうかを尋ねる短いCTA（例: 「是非、ご検討いただけますと幸いです。」）を入れてください。
 
 # 送信先情報
 - 企業・団体名: {lead_name}
@@ -1483,8 +1484,8 @@ def build_vertex_proposal_prompt(
 - 相手企業の公開情報から推定される課題に触れる
 - 押し売りを避け、丁寧で具体的な提案にする
 - 最後に短いCTA（相談・打ち合わせ提案）を入れる
-- 文字数は{safe_target}文字以内で必ず完結させること（超過厳禁）
-- {safe_target}文字を超えないよう、文章量を事前に調整してから書くこと
+- 文字数は{target_length}文字以内で必ず完結させること（超過厳禁）
+- {target_length}文字を超えないよう、文章量を事前に調整してから書くこと
 - 事実不明な内容は断定しない
 - CTAの後に送信者のWebサイトURL（{sender_website}）を必ず記載する
 - 段落や。ごとに改行する
