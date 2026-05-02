@@ -110,6 +110,8 @@ const proposalCharCount = document.querySelector('#proposal-char-count');
 
 let currentItems = [];
 let myListItems = [];
+let mapInstance = null;
+let mapMarkers = [];
 let placeTypeItems = [];
 let leadSortBy = 'updated_at';
 let leadSortDir = 'desc';
@@ -1093,6 +1095,114 @@ function getSelectedLeadItems() {
   const selected = new Set(getSelectedLeadIds());
   if (!selected.size) return [];
   return currentItems.filter((item) => selected.has(Number(item.id)));
+}
+
+function updateMapCreateFab() {
+  const fab = document.getElementById('map-create-fab');
+  if (!fab) return;
+  fab.hidden = getSelectedLeadIds().length === 0;
+}
+
+function loadGoogleMapsScript() {
+  return new Promise((resolve, reject) => {
+    if (window.google?.maps) { resolve(); return; }
+    const key = window.__MAPS_API_KEY || '';
+    if (!key) { reject(new Error('no-key')); return; }
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&language=ja`;
+    script.async = true;
+    script.onload = resolve;
+    script.onerror = () => reject(new Error('load-error'));
+    document.head.appendChild(script);
+  });
+}
+
+function renderMapPinList(items) {
+  const list = document.getElementById('map-pin-list');
+  if (!list) return;
+  if (!items.length) {
+    list.innerHTML = '<p class="muted">座標データのある施設が見つかりませんでした</p>';
+    return;
+  }
+  list.innerHTML = items
+    .map(
+      (item, i) => `
+      <div class="map-pin-item" data-index="${i}">
+        <span class="map-pin-number">${i + 1}</span>
+        <div>
+          <div class="map-pin-name">${escapeHtml(item.name || '名称未設定')}</div>
+          <div class="map-pin-address muted">${escapeHtml(item.address || '')}</div>
+        </div>
+      </div>`,
+    )
+    .join('');
+}
+
+async function initMapView(items) {
+  const mapEl = document.getElementById('google-map');
+  if (!mapEl) return;
+
+  try {
+    await loadGoogleMapsScript();
+  } catch (err) {
+    const msg =
+      err?.message === 'no-key'
+        ? 'Google Maps APIキーが設定されていません'
+        : 'Google Mapsの読み込みに失敗しました';
+    mapEl.innerHTML = `<p class="map-no-key">${msg}</p>`;
+    renderMapPinList([]);
+    return;
+  }
+
+  const itemsWithCoords = items.filter(
+    (item) => typeof item.latitude === 'number' && typeof item.longitude === 'number',
+  );
+
+  renderMapPinList(itemsWithCoords);
+
+  if (!itemsWithCoords.length) {
+    mapEl.innerHTML =
+      '<p class="map-no-key">選択した施設の座標データがありません。再取得してください。</p>';
+    return;
+  }
+
+  mapMarkers.forEach((m) => m.setMap(null));
+  mapMarkers = [];
+
+  const center = { lat: itemsWithCoords[0].latitude, lng: itemsWithCoords[0].longitude };
+
+  if (!mapInstance) {
+    mapInstance = new google.maps.Map(mapEl, {
+      center,
+      zoom: 14,
+      mapTypeControl: false,
+    });
+  } else {
+    mapInstance.setCenter(center);
+    mapInstance.setZoom(14);
+  }
+
+  itemsWithCoords.forEach((item, i) => {
+    const marker = new google.maps.Marker({
+      position: { lat: item.latitude, lng: item.longitude },
+      map: mapInstance,
+      title: item.name || '',
+      label: { text: String(i + 1), color: '#fff', fontSize: '11px', fontWeight: 'bold' },
+    });
+    const infoWindow = new google.maps.InfoWindow({
+      content: `<strong>${escapeHtml(item.name || '')}</strong><br>${escapeHtml(item.address || '')}`,
+    });
+    marker.addListener('click', () => infoWindow.open(mapInstance, marker));
+    mapMarkers.push(marker);
+  });
+
+  if (itemsWithCoords.length > 1) {
+    const bounds = new google.maps.LatLngBounds();
+    itemsWithCoords.forEach((item) =>
+      bounds.extend({ lat: item.latitude, lng: item.longitude }),
+    );
+    mapInstance.fitBounds(bounds);
+  }
 }
 
 function buildProposalTargetSummary(items = getSelectedLeadItems()) {
@@ -2293,6 +2403,7 @@ leadSelectAll?.addEventListener('change', (e) => {
   });
   updateProposalTargetSummary();
   updateProposalPreview();
+  updateMapCreateFab();
 });
 
 leadsTbody?.addEventListener('change', (e) => {
@@ -2300,6 +2411,7 @@ leadsTbody?.addEventListener('change', (e) => {
   if (!(target instanceof HTMLInputElement) || !target.classList.contains('lead-check')) return;
   updateProposalTargetSummary();
   updateProposalPreview();
+  updateMapCreateFab();
 });
 
 exportCsvBtn?.addEventListener('click', exportSelectedLeadsAsCsv);
@@ -2313,4 +2425,9 @@ myListSelectAll?.addEventListener('change', (e) => {
   });
 });
 
+document.getElementById('map-create-btn')?.addEventListener('click', () => {
+  const selected = getSelectedLeadItems();
+  switchView('map');
+  initMapView(selected);
+});
 

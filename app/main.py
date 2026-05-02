@@ -455,6 +455,8 @@ def init_db() -> None:
                 city TEXT,
                 address_detail TEXT,
                 address_components_json TEXT,
+                latitude DOUBLE PRECISION,
+                longitude DOUBLE PRECISION,
                 user_id INTEGER,
                 browser_client_id TEXT DEFAULT '',
                 created_at TEXT NOT NULL,
@@ -621,6 +623,14 @@ def init_db() -> None:
             )
             """
         )
+        try:
+            conn.execute("ALTER TABLE leads ADD COLUMN latitude DOUBLE PRECISION")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE leads ADD COLUMN longitude DOUBLE PRECISION")
+        except Exception:
+            pass
         try:
             conn.execute("ALTER TABLE contact_form_discoveries ADD COLUMN email TEXT NOT NULL DEFAULT ''")
         except Exception:
@@ -1615,7 +1625,7 @@ async def discover_contact_form_url(client: httpx.AsyncClient, website: str) -> 
 @app.get("/", response_class=HTMLResponse)
 def landing(request: Request) -> HTMLResponse:
     user = get_current_user(request)
-    return templates.TemplateResponse("app.html", {"request": request, "user": user, "app_base_url": APP_BASE_URL})
+    return templates.TemplateResponse("app.html", {"request": request, "user": user, "app_base_url": APP_BASE_URL, "maps_api_key": get_google_api_key()})
 
 # /app : / へリダイレクト（後方互換）
 @app.get("/app", response_class=HTMLResponse)
@@ -2935,6 +2945,11 @@ async def fetch_places(
                     address_parts = split_jp_address(address)
                 address_parts["address_detail"] = trim_address_detail(address_parts.get("address_detail", ""), place.get("name", ""))
 
+                geometry = place.get("geometry") or {}
+                location = geometry.get("location") or {}
+                lat = location.get("lat")
+                lng = location.get("lng")
+
                 places.append(
                     {
                         "name": detail_data.get("name") or place.get("name", ""),
@@ -2952,6 +2967,8 @@ async def fetch_places(
                         "city": address_parts.get("city", ""),
                         "address_detail": address_parts.get("address_detail", ""),
                         "address_components_json": json.dumps(address_components, ensure_ascii=False),
+                        "latitude": lat,
+                        "longitude": lng,
                     }
                 )
                 if len(places) >= max_results:
@@ -3039,8 +3056,8 @@ def upsert_lead(item: dict[str, Any], user_id: int | None = None, browser_client
         ).fetchone()
         conn.execute(
             """
-            INSERT INTO leads (name, place_id, website, phone, email, address, category, industry, rating, user_ratings_total, raw_types, postal_code, prefecture, city, address_detail, address_components_json, user_id, browser_client_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO leads (name, place_id, website, phone, email, address, category, industry, rating, user_ratings_total, raw_types, postal_code, prefecture, city, address_detail, address_components_json, latitude, longitude, user_id, browser_client_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(place_id) DO UPDATE SET
                 name=CASE WHEN TRIM(COALESCE(excluded.name, '')) <> '' THEN excluded.name ELSE leads.name END,
                 website=CASE WHEN TRIM(COALESCE(excluded.website, '')) <> '' THEN excluded.website ELSE leads.website END,
@@ -3057,6 +3074,8 @@ def upsert_lead(item: dict[str, Any], user_id: int | None = None, browser_client
                 city=CASE WHEN TRIM(COALESCE(excluded.city, '')) <> '' THEN excluded.city ELSE leads.city END,
                 address_detail=CASE WHEN TRIM(COALESCE(excluded.address_detail, '')) <> '' THEN excluded.address_detail ELSE leads.address_detail END,
                 address_components_json=CASE WHEN TRIM(COALESCE(excluded.address_components_json, '')) <> '' THEN excluded.address_components_json ELSE leads.address_components_json END,
+                latitude=COALESCE(excluded.latitude, leads.latitude),
+                longitude=COALESCE(excluded.longitude, leads.longitude),
                 user_id=COALESCE(excluded.user_id, leads.user_id),
                 browser_client_id=CASE WHEN TRIM(COALESCE(excluded.browser_client_id, '')) <> '' THEN excluded.browser_client_id ELSE leads.browser_client_id END,
                 updated_at=excluded.updated_at
@@ -3078,6 +3097,8 @@ def upsert_lead(item: dict[str, Any], user_id: int | None = None, browser_client
                 item.get("city", ""),
                 item.get("address_detail", ""),
                 item.get("address_components_json", ""),
+                item.get("latitude"),
+                item.get("longitude"),
                 user_id,
                 normalized_client_id,
                 now,
