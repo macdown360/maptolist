@@ -181,15 +181,32 @@ body {
   box-sizing: border-box;
 }
 
-.brand h1 {
+.brand-logo {
   margin: 0;
-  font-size: 22px;
+  font-size: 20px;
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+
+.logo-map {
+  font-weight: 300;
+  color: var(--text);
+}
+
+.logo-to {
+  font-weight: 700;
+  color: var(--accent-2);
+}
+
+.logo-list {
+  font-weight: 700;
+  color: var(--text);
 }
 
 .brand p {
-  margin: 2px 0 0;
+  margin: 4px 0 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .menu {
@@ -1276,14 +1293,13 @@ h1,
 h2,
 h3,
 .workspace-head h2,
-.panel h3,
-.brand h1 {
+.panel h3 {
   color: #061b31;
   font-weight: 300;
 }
 
-.brand h1 {
-  letter-spacing: -0.5px;
+.brand-logo .logo-to {
+  color: var(--accent-2);
 }
 
 .brand p,
