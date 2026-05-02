@@ -112,9 +112,8 @@ let currentItems = [];
 let myListItems = [];
 let mapInstance = null;
 let mapMarkers = [];
-let directionsRenderer = null;
+let mapInfoWindows = [];
 let currentMapItemsWithCoords = [];
-let routeOptimized = false;
 const leadCheckOrder = new Map(); // id -> timestamp (チェックした順番を記録)
 let placeTypeItems = [];
 let leadSortBy = 'updated_at';
@@ -1147,6 +1146,7 @@ function renderMapPinList(items) {
     .map(
       (item, i) => `
       <div class="map-pin-item" data-index="${i}">
+        <div class="map-pin-number">${i + 1}</div>
         <div>
           <div class="map-pin-name">${escapeHtml(item.name || '名称未設定')}</div>
           <div class="map-pin-address muted">${escapeHtml(item.address || '')}</div>
@@ -1154,64 +1154,6 @@ function renderMapPinList(items) {
       </div>`,
     )
     .join('');
-}
-
-function applyMapOrder(orderedItems) {
-  const idToOrigIdx = new Map(currentMapItemsWithCoords.map((item, i) => [item.id, i]));
-  orderedItems.forEach((item, newIdx) => {
-    const marker = mapMarkers[idToOrigIdx.get(item.id)];
-    if (marker != null) {
-      marker.setLabel({ text: String(newIdx + 1), color: '#fff', fontSize: '11px', fontWeight: 'bold' });
-    }
-  });
-  renderMapPinList(orderedItems);
-}
-
-async function renderMapRoute(itemsWithCoords, optimize = false) {
-  if (!mapInstance || itemsWithCoords.length < 2) return itemsWithCoords;
-
-  if (!directionsRenderer) {
-    directionsRenderer = new google.maps.DirectionsRenderer({
-      suppressMarkers: true,
-      polylineOptions: { strokeColor: '#5e8fcf', strokeWeight: 4, strokeOpacity: 0.75 },
-    });
-    directionsRenderer.setMap(mapInstance);
-  }
-
-  const origin = { lat: itemsWithCoords[0].latitude, lng: itemsWithCoords[0].longitude };
-  const destination = {
-    lat: itemsWithCoords[itemsWithCoords.length - 1].latitude,
-    lng: itemsWithCoords[itemsWithCoords.length - 1].longitude,
-  };
-  const waypoints = itemsWithCoords.slice(1, -1).map((item) => ({
-    location: { lat: item.latitude, lng: item.longitude },
-    stopover: true,
-  }));
-
-  try {
-    const service = new google.maps.DirectionsService();
-    const result = await service.route({
-      origin,
-      destination,
-      waypoints,
-      optimizeWaypoints: optimize,
-      travelMode: google.maps.TravelMode.DRIVING,
-    });
-    directionsRenderer.setDirections(result);
-
-    if (optimize && result.routes[0]?.waypoint_order?.length) {
-      const order = result.routes[0].waypoint_order;
-      const middle = itemsWithCoords.slice(1, -1);
-      return [
-        itemsWithCoords[0],
-        ...order.map((i) => middle[i]),
-        itemsWithCoords[itemsWithCoords.length - 1],
-      ];
-    }
-  } catch {
-    // Directions API 未有効などの場合は無視
-  }
-  return itemsWithCoords;
 }
 
 async function initMapView(items) {
@@ -1242,12 +1184,10 @@ async function initMapView(items) {
     return;
   }
 
+  mapInfoWindows.forEach((w) => w.close());
+  mapInfoWindows = [];
   mapMarkers.forEach((m) => m.setMap(null));
   mapMarkers = [];
-  if (directionsRenderer) {
-    directionsRenderer.setMap(null);
-    directionsRenderer = null;
-  }
 
   const center = { lat: itemsWithCoords[0].latitude, lng: itemsWithCoords[0].longitude };
 
@@ -1272,8 +1212,12 @@ async function initMapView(items) {
     const infoWindow = new google.maps.InfoWindow({
       content: `<strong>${escapeHtml(item.name || '')}</strong><br>${escapeHtml(item.address || '')}`,
     });
-    marker.addListener('click', () => infoWindow.open(mapInstance, marker));
+    marker.addListener('click', () => {
+      mapInfoWindows.forEach((w) => w.close());
+      infoWindow.open(mapInstance, marker);
+    });
     mapMarkers.push(marker);
+    mapInfoWindows.push(infoWindow);
   });
 
   if (itemsWithCoords.length > 1) {
@@ -1285,36 +1229,20 @@ async function initMapView(items) {
   }
 
   currentMapItemsWithCoords = itemsWithCoords;
-  routeOptimized = false;
-
-  const routeNote = document.getElementById('map-route-note');
-  if (routeNote) {
-    routeNote.hidden = itemsWithCoords.length < 2;
-    routeNote.textContent = 'チェックした順にルートを表示しています';
-  }
-  renderMapRoute(itemsWithCoords);
-
-  const optimizeBtn = document.getElementById('map-optimize-btn');
-  if (optimizeBtn) {
-    optimizeBtn.hidden = itemsWithCoords.length < 3;
-    optimizeBtn.textContent = '最短ルートで並べ直す';
-    optimizeBtn.disabled = false;
-    const freshBtn = optimizeBtn.cloneNode(true);
-    optimizeBtn.replaceWith(freshBtn);
-    freshBtn.addEventListener('click', async () => {
-      routeOptimized = !routeOptimized;
-      freshBtn.disabled = true;
-      const orderedItems = await renderMapRoute(currentMapItemsWithCoords, routeOptimized);
-      applyMapOrder(orderedItems);
-      freshBtn.disabled = false;
-      freshBtn.textContent = routeOptimized ? 'チェック順に戻す' : '最短ルートで並べ直す';
-      const note = document.getElementById('map-route-note');
-      if (note) note.textContent = routeOptimized ? '最短ルートに最適化しています' : 'チェックした順にルートを表示しています';
-    });
-  }
 
   const pinList = document.getElementById('map-pin-list');
   if (pinList) {
+    pinList.addEventListener('click', (e) => {
+      const item = e.target.closest('.map-pin-item');
+      if (!item) return;
+      const idx = Number(item.dataset.index);
+      const marker = mapMarkers[idx];
+      const infoWindow = mapInfoWindows[idx];
+      if (!marker || !infoWindow) return;
+      mapInfoWindows.forEach((w) => w.close());
+      infoWindow.open(mapInstance, marker);
+      mapInstance.panTo(marker.getPosition());
+    });
     pinList.addEventListener('mouseover', (e) => {
       const item = e.target.closest('.map-pin-item');
       if (!item) return;
