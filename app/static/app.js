@@ -112,6 +112,8 @@ let currentItems = [];
 let myListItems = [];
 let mapInstance = null;
 let mapMarkers = [];
+let directionsRenderer = null;
+const leadCheckOrder = new Map(); // id -> timestamp (チェックした順番を記録)
 let placeTypeItems = [];
 let leadSortBy = 'updated_at';
 let leadSortDir = 'desc';
@@ -1098,6 +1100,14 @@ function getSelectedLeadItems() {
   return currentItems.filter((item) => selected.has(Number(item.id)));
 }
 
+function getSelectedLeadItemsInOrder() {
+  return getSelectedLeadItems().sort((a, b) => {
+    const ta = leadCheckOrder.get(Number(a.id)) ?? 0;
+    const tb = leadCheckOrder.get(Number(b.id)) ?? 0;
+    return ta - tb;
+  });
+}
+
 function setLeadsLoading(on) {
   const spinner = document.getElementById('leads-loading-spinner');
   if (spinner) spinner.classList.toggle('is-loading', on);
@@ -1135,7 +1145,6 @@ function renderMapPinList(items) {
     .map(
       (item, i) => `
       <div class="map-pin-item" data-index="${i}">
-        <span class="map-pin-number">${i + 1}</span>
         <div>
           <div class="map-pin-name">${escapeHtml(item.name || '名称未設定')}</div>
           <div class="map-pin-address muted">${escapeHtml(item.address || '')}</div>
@@ -1143,6 +1152,42 @@ function renderMapPinList(items) {
       </div>`,
     )
     .join('');
+}
+
+async function renderMapRoute(itemsWithCoords) {
+  if (!mapInstance || itemsWithCoords.length < 2) return;
+
+  if (!directionsRenderer) {
+    directionsRenderer = new google.maps.DirectionsRenderer({
+      suppressMarkers: true,
+      polylineOptions: { strokeColor: '#5e8fcf', strokeWeight: 4, strokeOpacity: 0.75 },
+    });
+    directionsRenderer.setMap(mapInstance);
+  }
+
+  const origin = { lat: itemsWithCoords[0].latitude, lng: itemsWithCoords[0].longitude };
+  const destination = {
+    lat: itemsWithCoords[itemsWithCoords.length - 1].latitude,
+    lng: itemsWithCoords[itemsWithCoords.length - 1].longitude,
+  };
+  const waypoints = itemsWithCoords.slice(1, -1).map((item) => ({
+    location: { lat: item.latitude, lng: item.longitude },
+    stopover: true,
+  }));
+
+  try {
+    const service = new google.maps.DirectionsService();
+    const result = await service.route({
+      origin,
+      destination,
+      waypoints,
+      optimizeWaypoints: false,
+      travelMode: google.maps.TravelMode.DRIVING,
+    });
+    directionsRenderer.setDirections(result);
+  } catch {
+    // Directions API 未有効などの場合は無視
+  }
 }
 
 async function initMapView(items) {
@@ -1175,6 +1220,10 @@ async function initMapView(items) {
 
   mapMarkers.forEach((m) => m.setMap(null));
   mapMarkers = [];
+  if (directionsRenderer) {
+    directionsRenderer.setMap(null);
+    directionsRenderer = null;
+  }
 
   const center = { lat: itemsWithCoords[0].latitude, lng: itemsWithCoords[0].longitude };
 
@@ -1210,6 +1259,10 @@ async function initMapView(items) {
     );
     mapInstance.fitBounds(bounds);
   }
+
+  const routeNote = document.getElementById('map-route-note');
+  if (routeNote) routeNote.hidden = itemsWithCoords.length < 2;
+  renderMapRoute(itemsWithCoords);
 
   const pinList = document.getElementById('map-pin-list');
   if (pinList) {
@@ -2421,8 +2474,15 @@ auditRefresh?.addEventListener('click', fetchAuditLogs);
 
 leadSelectAll?.addEventListener('change', (e) => {
   const checked = e.target.checked;
-  document.querySelectorAll('.lead-check').forEach((el) => {
+  const now = Date.now();
+  document.querySelectorAll('.lead-check').forEach((el, i) => {
     el.checked = checked;
+    const id = Number(el.value);
+    if (checked) {
+      leadCheckOrder.set(id, now + i);
+    } else {
+      leadCheckOrder.delete(id);
+    }
   });
   updateProposalTargetSummary();
   updateProposalPreview();
@@ -2432,6 +2492,12 @@ leadSelectAll?.addEventListener('change', (e) => {
 leadsTbody?.addEventListener('change', (e) => {
   const target = e.target;
   if (!(target instanceof HTMLInputElement) || !target.classList.contains('lead-check')) return;
+  const id = Number(target.value);
+  if (target.checked) {
+    leadCheckOrder.set(id, Date.now());
+  } else {
+    leadCheckOrder.delete(id);
+  }
   updateProposalTargetSummary();
   updateProposalPreview();
   updateMapCreateFab();
@@ -2449,7 +2515,7 @@ myListSelectAll?.addEventListener('change', (e) => {
 });
 
 document.getElementById('map-create-btn')?.addEventListener('click', () => {
-  const selected = getSelectedLeadItems();
+  const selected = getSelectedLeadItemsInOrder();
   switchView('map');
   initMapView(selected);
 });
