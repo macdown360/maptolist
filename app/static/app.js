@@ -1208,6 +1208,19 @@ async function initMapView(items) {
     );
     mapInstance.fitBounds(bounds);
   }
+
+  const pinList = document.getElementById('map-pin-list');
+  if (pinList) {
+    pinList.addEventListener('mouseover', (e) => {
+      const item = e.target.closest('.map-pin-item');
+      if (!item) return;
+      const idx = Number(item.dataset.index);
+      const marker = mapMarkers[idx];
+      if (!marker || marker.getAnimation() !== null) return;
+      marker.setAnimation(google.maps.Animation.BOUNCE);
+      setTimeout(() => marker.setAnimation(null), 700);
+    });
+  }
 }
 
 function buildProposalTargetSummary(items = getSelectedLeadItems()) {

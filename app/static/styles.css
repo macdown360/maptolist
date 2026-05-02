@@ -1099,6 +1099,13 @@ th {
   border-bottom: none;
 }
 
+.map-pin-item:hover {
+  background: var(--panel-soft);
+  border-radius: 8px;
+  margin: 0 -8px;
+  padding: 10px 8px;
+}
+
 .map-pin-number {
   flex-shrink: 0;
   width: 22px;
