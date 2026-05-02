@@ -237,6 +237,7 @@ function maskApiKey(key) {
   return key.length >= 10 ? `${key.slice(0, 6)}...${key.slice(-4)}` : 'configured';
 }
 
+let _fallbackBrowserClientId = null;
 function getBrowserClientId() {
   try {
     const existing = String(window.localStorage.getItem(BROWSER_CLIENT_ID_STORAGE_KEY) || '').trim();
@@ -245,7 +246,10 @@ function getBrowserClientId() {
     window.localStorage.setItem(BROWSER_CLIENT_ID_STORAGE_KEY, nextId);
     return nextId;
   } catch {
-    return `browser-${Date.now()}`;
+    if (!_fallbackBrowserClientId) {
+      _fallbackBrowserClientId = `browser-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
+    return _fallbackBrowserClientId;
   }
 }
 
