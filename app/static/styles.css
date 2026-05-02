@@ -682,7 +682,7 @@ td {
 
 #proposal-generator-form {
   width: 100%;
-  grid-template-columns: minmax(0, 25fr) minmax(0, 25fr) minmax(0, 30fr) minmax(0, 20fr);
+  grid-template-columns: 1fr;
   align-items: start;
 }
 
