@@ -2520,3 +2520,8 @@ document.getElementById('map-create-btn')?.addEventListener('click', () => {
   initMapView(selected);
 });
 
+document.getElementById('map-sheet-handle')?.addEventListener('click', () => {
+  const sidebar = document.getElementById('map-pin-sidebar');
+  if (sidebar) sidebar.classList.toggle('is-expanded');
+});
+

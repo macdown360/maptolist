@@ -1124,6 +1124,14 @@ th {
   line-height: 1.4;
 }
 
+.map-sheet-handle {
+  display: none;
+}
+
+.map-sheet-body {
+  /* desktop: inherits sidebar padding */
+}
+
 .map-no-key {
   padding: 20px;
   font-size: 13px;
@@ -1758,6 +1766,78 @@ textarea:focus-visible {
     right: 12px;
     bottom: 12px;
     width: auto;
+  }
+
+  /* ── マップ ボトムシート ── */
+  .map-view-layout {
+    position: relative;
+    height: calc(100dvh - 50px);
+  }
+
+  .map-canvas {
+    position: absolute !important;
+    inset: 0;
+    height: 100% !important;
+    z-index: 0;
+  }
+
+  .map-pin-sidebar {
+    position: absolute !important;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto !important;
+    max-height: 65vh;
+    padding: 0 !important;
+    border-right: none !important;
+    border-top: 1px solid var(--line);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.14);
+    transform: translateY(calc(100% - 56px));
+    transition: transform 0.3s cubic-bezier(.4, 0, .2, 1);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    z-index: 10;
+  }
+
+  .map-pin-sidebar.is-expanded {
+    transform: translateY(0);
+  }
+
+  .map-sheet-handle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 56px;
+    flex-shrink: 0;
+    cursor: pointer;
+    gap: 6px;
+    user-select: none;
+  }
+
+  .map-sheet-drag-bar {
+    width: 36px;
+    height: 4px;
+    background: #c8cdd9;
+    border-radius: 2px;
+  }
+
+  .map-sheet-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .map-pin-sidebar h3 {
+    display: none;
+  }
+
+  .map-sheet-body {
+    overflow-y: auto;
+    padding: 4px 16px 24px;
+    flex: 1;
   }
 
   /* ── インポートヒーロー ── */

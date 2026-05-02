@@ -247,10 +247,16 @@
 
 			<section class="view" id="view-map">
 				<div class="map-view-layout">
-					<div class="map-pin-sidebar">
-						<h3>マップ表示</h3>
-						<p class="map-route-note muted" id="map-route-note" hidden>チェックした順にルートを表示しています</p>
-						<div id="map-pin-list"><p class="muted">マップ作成ボタンで地図を表示します</p></div>
+					<div class="map-pin-sidebar" id="map-pin-sidebar">
+						<div class="map-sheet-handle" id="map-sheet-handle">
+							<div class="map-sheet-drag-bar"></div>
+							<span class="map-sheet-title">マップ表示</span>
+						</div>
+						<div class="map-sheet-body">
+							<h3>マップ表示</h3>
+							<p class="map-route-note muted" id="map-route-note" hidden>チェックした順にルートを表示しています</p>
+							<div id="map-pin-list"><p class="muted">マップ作成ボタンで地図を表示します</p></div>
+						</div>
 					</div>
 					<div id="google-map" class="map-canvas"></div>
 				</div>
