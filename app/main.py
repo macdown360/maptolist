@@ -688,10 +688,10 @@ def record_fetch_usage(user_id: int, count: int) -> None:
 
 
 # ゲスト制限
-GUEST_IMPORT_DAILY_LIMIT = 1   # 1日1回まで
+GUEST_IMPORT_DAILY_LIMIT = 3   # 1日3回まで
 GUEST_IMPORT_MAX = 5            # 1回最大5件
 GUEST_DISCOVER_MAX = 5          # フォーム探索最大5件
-GUEST_PROPOSAL_DAILY_LIMIT = 1  # 提案文生成1日1回まで
+GUEST_PROPOSAL_DAILY_LIMIT = 3  # 提案文生成1日3回まで
 
 
 def get_guest_daily_count(browser_client_id: str, action: str) -> int:
@@ -2145,7 +2145,7 @@ async def import_google_places(request: Request, payload: ImportRequest, user: O
             )
         effective_max = min(payload.max_results, daily_remaining, monthly_remaining)
     else:
-        # ゲスト: 1日1回・最大5件
+        # ゲスト: 1日3回・最大5件
         if not browser_client_id:
             raise HTTPException(status_code=400, detail="ブラウザIDが取得できません。ページを再読み込みしてください。")
         guest_used = get_guest_daily_count(browser_client_id, "import")
@@ -2464,7 +2464,7 @@ async def generate_proposal(request: Request, payload: ProposalGenerationRequest
     init_db()
     browser_client_id = get_browser_client_id(request)
 
-    # ゲスト: 1日1回まで
+    # ゲスト: 1日3回まで
     if not user:
         if not browser_client_id:
             raise HTTPException(status_code=400, detail="ブラウザIDが取得できません。ページを再読み込みしてください。")
