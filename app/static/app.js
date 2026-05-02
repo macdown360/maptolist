@@ -443,6 +443,7 @@ function switchView(viewName) {
   if (viewName === 'my-list') fetchMyList();
   if (viewName === 'history') fetchContactLogs();
   if (viewName === 'contact-forms') fetchContactForms();
+  updateMapCreateFab();
 }
 
 
@@ -1105,7 +1106,8 @@ function setLeadsLoading(on) {
 function updateMapCreateFab() {
   const fab = document.getElementById('map-create-fab');
   if (!fab) return;
-  fab.classList.toggle('is-visible', getSelectedLeadIds().length > 0);
+  const onLeadsView = document.getElementById('view-leads')?.classList.contains('active');
+  fab.classList.toggle('is-visible', onLeadsView && getSelectedLeadIds().length > 0);
 }
 
 function loadGoogleMapsScript() {
