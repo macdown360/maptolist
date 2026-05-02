@@ -1885,7 +1885,7 @@ function renderQuickTags() {
 renderQuickTags();
 
 importQueryInput?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
     importForm?.requestSubmit();
   }
