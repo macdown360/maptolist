@@ -117,6 +117,7 @@ let leadPreviewSourceItems = [];
 let leadFetchController = null;
 let leadFetchRequestSeq = 0;
 let leadFilterAutoSearchTimerId = null;
+let isImporting = false;
 const LEAD_FILTER_AUTO_SEARCH_DEBOUNCE_MS = 60;
 let proposalTargetLead = null;
 const MAPS_KEY_STORAGE_KEY = 'maptolist.google_maps_api_key.v2';
@@ -1893,6 +1894,7 @@ importQueryInput?.addEventListener('keydown', (e) => {
 
 importForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
+  if (isImporting) return;
 
   const maxResultsRaw = importForm.querySelector('input[name="max_results"]')?.value ?? '';
   let maxResultsNum = Number(maxResultsRaw);
@@ -1911,6 +1913,9 @@ importForm?.addEventListener('submit', async (e) => {
     showToast('ゲストモードでは最大5件まで取得できます', 'info');
   }
 
+  isImporting = true;
+  const submitBtn = importForm.querySelector('[type="submit"]');
+  if (submitBtn) submitBtn.disabled = true;
   setBusyStatusWithCat(importResult, '取得中...');
   const payload = Object.fromEntries(new FormData(importForm).entries());
   payload.max_results = maxResultsNum;
@@ -1925,9 +1930,20 @@ importForm?.addEventListener('submit', async (e) => {
   } catch (err) {
     importResult.textContent = `エラー: ${err instanceof Error ? err.message : String(err)}`;
     return;
+  } finally {
+    isImporting = false;
+    if (submitBtn) submitBtn.disabled = false;
   }
   if (!res) return;
-  const data = await res.json();
+
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    importResult.textContent = `エラー: サーバーエラーが発生しました (${res.status})`;
+    addActivity(`取り込み失敗: サーバーエラー ${res.status}`, 'system');
+    return;
+  }
 
   if (!res.ok) {
     importResult.textContent = `エラー: ${data.detail || '取得に失敗しました'}`;
