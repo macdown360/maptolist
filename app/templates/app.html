@@ -75,7 +75,7 @@
 
 			<section class="view" id="view-leads">
 				<div class="panel">
-					<h3>取得結果一覧</h3>
+					<h3>取得結果一覧 <span id="leads-loading-spinner" class="spinner" aria-label="読み込み中"></span></h3>
 					<form id="filter-form" class="form-grid compact">
 						<label>都道府県<select name="prefecture"><option value="">すべて</option></select></label>
 						<label>市区町村<select name="city"><option value="">すべて</option></select></label>
@@ -257,7 +257,7 @@
 
 		</main>
 
-		<div id="map-create-fab" class="map-create-fab" hidden>
+		<div id="map-create-fab" class="map-create-fab">
 			<button type="button" id="map-create-btn" title="選択した施設をマップ表示">
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 					<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/>

@@ -993,12 +993,38 @@ th {
   margin-top: 6px;
 }
 
+/* ── ローディングスピナー ── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  display: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent-2);
+  border-radius: 50%;
+  animation: spin 0.65s linear infinite;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.spinner.is-loading {
+  display: inline-block;
+}
+
 /* ── マップ作成FAB ── */
 .map-create-fab {
+  display: none;
   position: fixed;
   bottom: 74px;
   right: 18px;
   z-index: 85;
+}
+
+.map-create-fab.is-visible {
+  display: block;
 }
 
 .map-create-fab button {

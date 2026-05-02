@@ -1097,10 +1097,15 @@ function getSelectedLeadItems() {
   return currentItems.filter((item) => selected.has(Number(item.id)));
 }
 
+function setLeadsLoading(on) {
+  const spinner = document.getElementById('leads-loading-spinner');
+  if (spinner) spinner.classList.toggle('is-loading', on);
+}
+
 function updateMapCreateFab() {
   const fab = document.getElementById('map-create-fab');
   if (!fab) return;
-  fab.hidden = getSelectedLeadIds().length === 0;
+  fab.classList.toggle('is-visible', getSelectedLeadIds().length > 0);
 }
 
 function loadGoogleMapsScript() {
@@ -1497,6 +1502,8 @@ async function fetchLeads() {
   leadFetchController = controller;
   const requestSeq = ++leadFetchRequestSeq;
 
+  setLeadsLoading(true);
+
   const normalizedFilters = getNormalizedLeadFilters();
   const params = new URLSearchParams();
   if (normalizedFilters.q) params.set('q', normalizedFilters.q);
@@ -1532,6 +1539,7 @@ async function fetchLeads() {
   } finally {
     if (leadFetchController === controller) {
       leadFetchController = null;
+      setLeadsLoading(false);
     }
   }
 
