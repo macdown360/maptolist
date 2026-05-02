@@ -634,8 +634,29 @@ td {
   width: 100px;
 }
 
+.contact-forms-2col {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.contact-forms-proposal-col .proposal-builder {
+  position: sticky;
+  top: 16px;
+}
+
+@media (max-width: 1100px) {
+  .contact-forms-2col {
+    grid-template-columns: 1fr;
+  }
+  .contact-forms-proposal-col .proposal-builder {
+    position: static;
+  }
+}
+
 .proposal-builder {
-  margin: 18px 0 14px;
+  margin: 0;
   padding: 16px;
   border: 1px solid #d9e4f3;
   border-radius: 14px;

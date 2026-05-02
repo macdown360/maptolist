@@ -198,49 +198,55 @@
 
 			<section class="view" id="view-contact-forms">
 				<div class="panel">
-					<h3>問い合わせフォーム一覧</h3>
-					<p class="muted">取得結果一覧で選択した企業のWebサイト内から、問い合わせフォームURLを探索した結果を表示します。問い合わせフォームが見つからない場合は一覧に追加しません。</p>
-					<div class="proposal-builder">
-						<div class="proposal-builder-head">
-							<div>
-								<h4>提案文の自動作成</h4>
-								<p class="muted">問い合わせ先企業の情報とあなたの提案したい情報を元に、提案文の叩き台をAIで自動生成できます。</p>
+					<div class="contact-forms-2col">
+						<div class="contact-forms-list-col">
+							<h3>問い合わせフォーム一覧</h3>
+							<p class="muted">取得結果一覧で選択した企業のWebサイト内から、問い合わせフォームURLを探索した結果を表示します。問い合わせフォームが見つからない場合は一覧に追加しません。</p>
+							<p id="contact-forms-result" class="muted"></p>
+							<div class="table-wrap">
+								<table id="contact-forms-table">
+									<thead>
+										<tr>
+											<th>企業・団体名</th>
+											<th>Webサイト</th>
+											<th>問い合わせフォームURL</th>
+											<th>提案文生成日</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td colspan="4" class="muted">まだ問い合わせフォームURLはありません。</td>
+										</tr>
+									</tbody>
+								</table>
 							</div>
 						</div>
-						<form id="proposal-generator-form" class="form-grid compact" onsubmit="return false;">
-							<label>あなたの社名<input name="sender_company" placeholder="例: 株式会社AutoSales" required /></label>
-							<label>あなたの名前<input name="sender_name" placeholder="例: 山田 太郎" required /></label>
-							<label>あなたのWEBサイト<input name="sender_website" placeholder="例: https://autosales.example.com または autosales.example.com" required /></label>
-							<label>文字数（1,000文字まで）<input name="target_length" type="number" min="120" max="1000" step="10" value="500" required /></label>
-							<p class="proposal-section-title proposal-service-field">提案したいサービスまたは商品の内容</p>
-							<label class="proposal-service-field">
-								<textarea name="service_description" rows="3" placeholder="例: 整備工場向けの来店予約自動化サービス。電話受付の負担を減らし、予約漏れを防げます。" required></textarea>
-							</label>
-						</form>
-						<p id="proposal-target-summary" class="muted">問い合わせフォーム一覧の「提案文生成」ボタンを押すと、企業情報を反映した文案を作成します。</p>
-						<div class="proposal-output-tools">
-							<button type="button" id="copy-proposal-btn" class="ghost">提案文をコピー</button>
-							<span id="proposal-char-count" class="muted">0文字</span>
+						<div class="contact-forms-proposal-col">
+							<div class="proposal-builder">
+								<div class="proposal-builder-head">
+									<div>
+										<h4>提案文の自動作成</h4>
+										<p class="muted">問い合わせ先企業の情報とあなたの提案したい情報を元に、提案文の叩き台をAIで自動生成できます。</p>
+									</div>
+								</div>
+								<form id="proposal-generator-form" class="form-grid compact" onsubmit="return false;">
+									<label>あなたの社名<input name="sender_company" placeholder="例: 株式会社AutoSales" required /></label>
+									<label>あなたの名前<input name="sender_name" placeholder="例: 山田 太郎" required /></label>
+									<label>あなたのWEBサイト<input name="sender_website" placeholder="例: https://autosales.example.com または autosales.example.com" required /></label>
+									<label>文字数（1,000文字まで）<input name="target_length" type="number" min="120" max="1000" step="10" value="500" required /></label>
+									<p class="proposal-section-title proposal-service-field">提案したいサービスまたは商品の内容</p>
+									<label class="proposal-service-field">
+										<textarea name="service_description" rows="3" placeholder="例: 整備工場向けの来店予約自動化サービス。電話受付の負担を減らし、予約漏れを防げます。" required></textarea>
+									</label>
+								</form>
+								<p id="proposal-target-summary" class="muted">問い合わせフォーム一覧の「提案文生成」ボタンを押すと、企業情報を反映した文案を作成します。</p>
+								<div class="proposal-output-tools">
+									<button type="button" id="copy-proposal-btn" class="ghost">提案文をコピー</button>
+									<span id="proposal-char-count" class="muted">0文字</span>
+								</div>
+								<textarea id="proposal-generator-result" class="proposal-result" rows="9" readonly placeholder="ここに生成された提案文が表示されます"></textarea>
+							</div>
 						</div>
-						<textarea id="proposal-generator-result" class="proposal-result" rows="9" readonly placeholder="ここに生成された提案文が表示されます"></textarea>
-					</div>
-					<p id="contact-forms-result" class="muted"></p>
-					<div class="table-wrap">
-						<table id="contact-forms-table">
-							<thead>
-								<tr>
-									<th>企業・団体名</th>
-									<th>Webサイト</th>
-									<th>問い合わせフォームURL</th>
-									<th>提案文生成日</th>
-								</tr>
-							</thead>
-							<tbody>
-								<tr>
-									<td colspan="4" class="muted">まだ問い合わせフォームURLはありません。</td>
-								</tr>
-							</tbody>
-						</table>
 					</div>
 				</div>
 			</section>
