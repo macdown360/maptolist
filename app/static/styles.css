@@ -1108,7 +1108,15 @@ th {
 
 .map-route-note {
   font-size: 11px;
-  margin: -4px 0 10px;
+  margin: -4px 0 8px;
+}
+
+.map-optimize-btn {
+  display: block;
+  width: 100%;
+  font-size: 12px;
+  padding: 7px 12px;
+  margin-bottom: 12px;
 }
 
 .map-pin-name {

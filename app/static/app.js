@@ -113,6 +113,8 @@ let myListItems = [];
 let mapInstance = null;
 let mapMarkers = [];
 let directionsRenderer = null;
+let currentMapItemsWithCoords = [];
+let routeOptimized = false;
 const leadCheckOrder = new Map(); // id -> timestamp (チェックした順番を記録)
 let placeTypeItems = [];
 let leadSortBy = 'updated_at';
@@ -1154,8 +1156,19 @@ function renderMapPinList(items) {
     .join('');
 }
 
-async function renderMapRoute(itemsWithCoords) {
-  if (!mapInstance || itemsWithCoords.length < 2) return;
+function applyMapOrder(orderedItems) {
+  const idToOrigIdx = new Map(currentMapItemsWithCoords.map((item, i) => [item.id, i]));
+  orderedItems.forEach((item, newIdx) => {
+    const marker = mapMarkers[idToOrigIdx.get(item.id)];
+    if (marker != null) {
+      marker.setLabel({ text: String(newIdx + 1), color: '#fff', fontSize: '11px', fontWeight: 'bold' });
+    }
+  });
+  renderMapPinList(orderedItems);
+}
+
+async function renderMapRoute(itemsWithCoords, optimize = false) {
+  if (!mapInstance || itemsWithCoords.length < 2) return itemsWithCoords;
 
   if (!directionsRenderer) {
     directionsRenderer = new google.maps.DirectionsRenderer({
@@ -1181,13 +1194,24 @@ async function renderMapRoute(itemsWithCoords) {
       origin,
       destination,
       waypoints,
-      optimizeWaypoints: false,
+      optimizeWaypoints: optimize,
       travelMode: google.maps.TravelMode.DRIVING,
     });
     directionsRenderer.setDirections(result);
+
+    if (optimize && result.routes[0]?.waypoint_order?.length) {
+      const order = result.routes[0].waypoint_order;
+      const middle = itemsWithCoords.slice(1, -1);
+      return [
+        itemsWithCoords[0],
+        ...order.map((i) => middle[i]),
+        itemsWithCoords[itemsWithCoords.length - 1],
+      ];
+    }
   } catch {
     // Directions API 未有効などの場合は無視
   }
+  return itemsWithCoords;
 }
 
 async function initMapView(items) {
@@ -1260,9 +1284,34 @@ async function initMapView(items) {
     mapInstance.fitBounds(bounds);
   }
 
+  currentMapItemsWithCoords = itemsWithCoords;
+  routeOptimized = false;
+
   const routeNote = document.getElementById('map-route-note');
-  if (routeNote) routeNote.hidden = itemsWithCoords.length < 2;
+  if (routeNote) {
+    routeNote.hidden = itemsWithCoords.length < 2;
+    routeNote.textContent = 'チェックした順にルートを表示しています';
+  }
   renderMapRoute(itemsWithCoords);
+
+  const optimizeBtn = document.getElementById('map-optimize-btn');
+  if (optimizeBtn) {
+    optimizeBtn.hidden = itemsWithCoords.length < 3;
+    optimizeBtn.textContent = '最短ルートで並べ直す';
+    optimizeBtn.disabled = false;
+    const freshBtn = optimizeBtn.cloneNode(true);
+    optimizeBtn.replaceWith(freshBtn);
+    freshBtn.addEventListener('click', async () => {
+      routeOptimized = !routeOptimized;
+      freshBtn.disabled = true;
+      const orderedItems = await renderMapRoute(currentMapItemsWithCoords, routeOptimized);
+      applyMapOrder(orderedItems);
+      freshBtn.disabled = false;
+      freshBtn.textContent = routeOptimized ? 'チェック順に戻す' : '最短ルートで並べ直す';
+      const note = document.getElementById('map-route-note');
+      if (note) note.textContent = routeOptimized ? '最短ルートに最適化しています' : 'チェックした順にルートを表示しています';
+    });
+  }
 
   const pinList = document.getElementById('map-pin-list');
   if (pinList) {
