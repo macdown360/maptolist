@@ -7,7 +7,7 @@ OUT_DIR="$ROOT_DIR/public"
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
-cp "$ROOT_DIR/app/templates/index.html" "$OUT_DIR/index.html"
+cp "$ROOT_DIR/app/templates/app.html" "$OUT_DIR/index.html"
 cp "$ROOT_DIR/app/static/app.js" "$OUT_DIR/app.js"
 cp "$ROOT_DIR/app/static/styles.css" "$OUT_DIR/styles.css"
 cp "$ROOT_DIR/app/static/favicon.svg" "$OUT_DIR/favicon.svg"
