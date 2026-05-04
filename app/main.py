@@ -1624,7 +1624,20 @@ async def discover_contact_form_url(client: httpx.AsyncClient, website: str) -> 
 @app.get("/", response_class=HTMLResponse)
 def landing(request: Request) -> HTMLResponse:
     user = get_current_user(request)
-    return templates.TemplateResponse("app.html", {"request": request, "user": user, "app_base_url": APP_BASE_URL, "maps_api_key": get_google_api_key()})
+    static_dir = Path(__file__).parent / "static"
+    def _mtime(filename: str) -> str:
+        try:
+            return str(int((static_dir / filename).stat().st_mtime))
+        except OSError:
+            return "0"
+    return templates.TemplateResponse("app.html", {
+        "request": request,
+        "user": user,
+        "app_base_url": APP_BASE_URL,
+        "maps_api_key": get_google_api_key(),
+        "v_js": _mtime("app.js"),
+        "v_css": _mtime("styles.css"),
+    })
 
 # /app : / へリダイレクト（後方互換）
 @app.get("/app", response_class=HTMLResponse)

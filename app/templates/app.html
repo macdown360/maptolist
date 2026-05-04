@@ -5,7 +5,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 	<title>Map to List Workspace</title>
 	<link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
-	<link rel="stylesheet" href="/static/styles.css" />
+	<link rel="stylesheet" href="/static/styles.css?v={{ v_css }}" />
 	<!-- Google tag (gtag.js) -->
 	<script async src="https://www.googletagmanager.com/gtag/js?id=G-5CR2872XQB"></script>
 	<script>
@@ -289,6 +289,6 @@
 	{% endif %}
 	<div id="toast" class="toast" role="status" aria-live="polite"></div>
 	<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-	<script src="/static/app.js"></script>
+	<script src="/static/app.js?v={{ v_js }}"></script>
 </body>
 </html>
