@@ -1720,7 +1720,7 @@ async def auth_signup_post(
             resp = await client.post(
                 f"{SUPABASE_URL}/auth/v1/signup",
                 headers={"apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json"},
-                json={"email": email, "password": password},
+                json={"email": email, "password": password, "redirect_to": f"{APP_BASE_URL}/login"},
             )
         data = resp.json()
         if resp.status_code not in (200, 201):
