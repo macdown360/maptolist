@@ -1726,7 +1726,7 @@ async def auth_signup_post(
             resp = await client.post(
                 f"{SUPABASE_URL}/auth/v1/signup",
                 headers={"apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json"},
-                json={"email": email, "password": password, "redirect_to": f"{APP_BASE_URL}/login"},
+                json={"email": email, "password": password, "redirect_to": f"{APP_BASE_URL}/auth/callback"},
             )
         data = resp.json()
         if resp.status_code not in (200, 201):
@@ -1751,6 +1751,82 @@ async def auth_signup_post(
     request.session["user_id"] = user["id"]
     log_audit("signup", "user", str(user["id"]), {"email": user_email})
     return RedirectResponse("/", status_code=303)
+
+
+@app.get("/auth/callback", response_class=HTMLResponse)
+def auth_callback_page() -> HTMLResponse:
+    """Supabase メール確認後のコールバックページ。ハッシュ内のトークンを処理する。"""
+    html = """<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="UTF-8" /><title>認証処理中...</title></head>
+<body>
+<p style="font-family:sans-serif;text-align:center;margin-top:40px;">認証処理中...</p>
+<script>
+(function () {
+  var hash = window.location.hash.substring(1);
+  var params = new URLSearchParams(hash);
+  var error = params.get('error');
+  var access_token = params.get('access_token');
+
+  if (error) {
+    var desc = params.get('error_description') || error;
+    window.location.href = '/login?error=' + encodeURIComponent(desc);
+    return;
+  }
+
+  if (access_token) {
+    fetch('/auth/session', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'access_token=' + encodeURIComponent(access_token)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        window.location.href = '/';
+      } else {
+        window.location.href = '/login?error=' + encodeURIComponent(data.error || '認証に失敗しました');
+      }
+    })
+    .catch(function() {
+      window.location.href = '/login?error=' + encodeURIComponent('認証サーバーへの接続に失敗しました');
+    });
+    return;
+  }
+
+  window.location.href = '/login';
+})();
+</script>
+</body>
+</html>"""
+    return HTMLResponse(html)
+
+
+@app.post("/auth/session")
+async def auth_session(request: Request, access_token: str = Form(...)):
+    """フロントエンドから受け取ったアクセストークンを検証しセッションを作成する。"""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"{SUPABASE_URL}/auth/v1/user",
+                headers={"apikey": SUPABASE_ANON_KEY, "Authorization": f"Bearer {access_token}"},
+            )
+        if resp.status_code != 200:
+            return {"ok": False, "error": "トークンが無効です"}
+        user_data = resp.json()
+        supabase_id = user_data.get("id", "")
+        user_email = user_data.get("email", "")
+    except Exception:
+        return {"ok": False, "error": "認証サーバーへの接続に失敗しました"}
+
+    if not supabase_id:
+        return {"ok": False, "error": "ユーザー情報の取得に失敗しました"}
+
+    init_db()
+    user = upsert_user_supabase(supabase_id, user_email)
+    request.session["user_id"] = user["id"]
+    log_audit("email_verify_login", "user", str(user["id"]), {"email": user_email})
+    return {"ok": True}
 
 
 @app.get("/auth/logout")
