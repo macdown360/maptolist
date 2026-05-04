@@ -33,11 +33,13 @@
     }
     .brand-title {
       font-size: 32px;
-      font-weight: 300;
       letter-spacing: -0.64px;
-      color: #061b31;
+      line-height: 1;
       margin-bottom: 8px;
     }
+    .logo-map { font-weight: 300; color: #061b31; }
+    .logo-to  { font-weight: 700; color: #4434d4; }
+    .logo-list{ font-weight: 700; color: #061b31; }
     .brand-sub {
       font-size: 15px;
       color: #64748d;
@@ -161,8 +163,8 @@
 <body>
   <div class="login-card">
     <div style="font-size:56px;margin-bottom:20px;">📊</div>
-    <p class="brand-title">maptolist</p>
-    <p class="brand-sub">営業リード自動収集・連絡システム</p>
+    <h1 class="brand-title"><span class="logo-map">map</span><span class="logo-to">to</span><span class="logo-list">list</span></h1>
+    <p class="brand-sub">List generate workspace</p>
 
     {% if error %}
     <div class="alert">{{ error }}</div>
