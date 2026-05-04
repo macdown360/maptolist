@@ -328,10 +328,9 @@ async function loadUserBadge() {
     return;
   }
 
-  // ログイン済み: シンプルなアイコンとユーザー名のみ
+  // ログイン済み: 名前のみ表示（プロフィール写真なし）
   sidebarFoot.innerHTML = `
     <div class="user-card simple-user-card" id="user-badge">
-      <img src="${user.picture || '/static/user.svg'}" class="user-avatar" alt="user" />
       <span class="user-name">${escapeHtml(user.name || user.email || 'ユーザー')}</span>
     </div>
   `;
