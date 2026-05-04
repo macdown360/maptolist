@@ -1,3 +1,37 @@
+// --- Supabase メール確認コールバック処理 ---
+(function () {
+  var hash = window.location.hash.substring(1);
+  if (!hash) return;
+  var params = new URLSearchParams(hash);
+  var access_token = params.get('access_token');
+  var error = params.get('error');
+
+  if (error) {
+    var desc = params.get('error_description') || error;
+    window.location.replace('/login?error=' + encodeURIComponent(desc));
+    return;
+  }
+
+  if (access_token) {
+    history.replaceState(null, '', window.location.pathname);
+    fetch('/auth/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'access_token=' + encodeURIComponent(access_token)
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.ok) {
+        window.location.reload();
+      } else {
+        window.location.replace('/login?error=' + encodeURIComponent(data.error || '認証に失敗しました'));
+      }
+    })
+    .catch(function () {
+      window.location.replace('/login?error=' + encodeURIComponent('認証サーバーへの接続に失敗しました'));
+    });
+  }
+})();
 
 // --- サイドバー開閉トグル ---
 document.addEventListener('DOMContentLoaded', function () {
