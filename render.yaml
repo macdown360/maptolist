@@ -10,15 +10,13 @@ services:
         value: 3.11.11
       - key: APP_BASE_URL
         value: https://maptolist.online
-      - key: DISABLE_GOOGLE_LOGIN
-        value: "true"
       - key: CORS_ALLOW_ORIGINS
         value: https://maptolist.online,https://www.maptolist.online,https://macdown360.github.io
       - key: DATABASE_URL
         sync: false
       - key: SESSION_SECRET
         generateValue: true
-      - key: GOOGLE_CLIENT_ID
+      - key: SUPABASE_URL
         sync: false
-      - key: GOOGLE_CLIENT_SECRET
+      - key: SUPABASE_ANON_KEY
         sync: false

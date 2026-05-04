@@ -21,8 +21,7 @@ import smtplib
 import httpx
 from google.auth import default as google_auth_default  # type: ignore[reportMissingImports]
 from google.auth.transport.requests import Request as GoogleAuthRequest  # type: ignore[reportMissingImports]
-from authlib.integrations.starlette_client import OAuth
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -48,11 +47,10 @@ CITY_REGEX = re.compile(
     r"^(.*(?:郡.*[町村]|市.*区|市|区|町|村))"
 )
 DEFAULT_DAILY_SEND_LIMIT = int(os.getenv("DAILY_SEND_LIMIT", "100"))
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
 APP_BASE_URL = os.getenv("APP_BASE_URL") or os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
 SESSION_SECRET = os.getenv("SESSION_SECRET", secrets.token_hex(32))
-DISABLE_GOOGLE_LOGIN = os.getenv("DISABLE_GOOGLE_LOGIN", "false").lower() == "true"
 CORS_ALLOW_ORIGINS = [x.strip() for x in os.getenv("CORS_ALLOW_ORIGINS", "").split(",") if x.strip()]
 DEMO_USER_GOOGLE_ID = "local-demo-user"
 DEMO_USER_EMAIL = "demo@local"
@@ -351,19 +349,6 @@ if CORS_ALLOW_ORIGINS:
 app.mount("/static", StaticFiles(directory=BASE_DIR / "app" / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
 
-oauth = OAuth()
-oauth.register(
-    name="google",
-    client_id=GOOGLE_CLIENT_ID,
-    client_secret=GOOGLE_CLIENT_SECRET,
-    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
-    client_kwargs={
-        "scope": "openid email profile https://www.googleapis.com/auth/gmail.send",
-        "access_type": "offline",
-        "prompt": "consent",
-    },
-)
-
 
 class ImportRequest(BaseModel):
     query: str = Field(..., description="検索キーワード。例: カフェ 東京")
@@ -628,7 +613,14 @@ def init_db() -> None:
         try:
             conn.execute("ALTER TABLE contact_form_discoveries ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''")
         except Exception:
-            # 既存環境ではカラム追加済みの場合がある
+            pass
+        try:
+            conn.execute("ALTER TABLE users ALTER COLUMN google_id DROP NOT NULL")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS supabase_id TEXT UNIQUE")
+        except Exception:
             pass
 
 
@@ -926,7 +918,7 @@ def set_env_key(key: str, value: str) -> None:
 def get_current_user(request: Request) -> dict[str, Any] | None:
     user_id = request.session.get("user_id")
     if not user_id:
-        # is_auth_disabled() でもDemo Userを返さず、未ログインはNone
+        # 未ログインはNone
         return None
     with get_connection() as conn:
         row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
@@ -942,8 +934,8 @@ def require_user(request: Request) -> dict[str, Any]:
     return user
 
 
-def is_auth_disabled() -> bool:
-    return DISABLE_GOOGLE_LOGIN or not is_google_oauth_configured()
+def is_supabase_configured() -> bool:
+    return bool(SUPABASE_URL.strip() and SUPABASE_ANON_KEY.strip())
 
 
 def get_or_create_demo_user() -> dict[str, Any]:
@@ -952,16 +944,16 @@ def get_or_create_demo_user() -> dict[str, Any]:
     with get_connection() as conn:
         conn.execute(
             """
-            INSERT INTO users (google_id, email, name, picture, maps_api_key, gmail_access_token, gmail_refresh_token, gmail_token_expiry, created_at, updated_at)
+            INSERT INTO users (supabase_id, email, name, picture, maps_api_key, gmail_access_token, gmail_refresh_token, gmail_token_expiry, created_at, updated_at)
             VALUES (?, ?, ?, ?, '', '', '', '', ?, ?)
-            ON CONFLICT(google_id) DO UPDATE SET
+            ON CONFLICT(supabase_id) DO UPDATE SET
                 email=excluded.email,
                 name=excluded.name,
                 updated_at=excluded.updated_at
             """,
             (DEMO_USER_GOOGLE_ID, DEMO_USER_EMAIL, DEMO_USER_NAME, "", now, now),
         )
-        row = conn.execute("SELECT * FROM users WHERE google_id = ?", (DEMO_USER_GOOGLE_ID,)).fetchone()
+        row = conn.execute("SELECT * FROM users WHERE supabase_id = ?", (DEMO_USER_GOOGLE_ID,)).fetchone()
     return dict(row) if row else {}
 
 
@@ -989,33 +981,20 @@ def validate_my_list_priority(priority: str) -> str:
     return normalized
 
 
-def upsert_user(
-    google_id: str,
-    email: str,
-    name: str,
-    picture: str,
-    access_token: str,
-    refresh_token: str,
-    token_expiry: str,
-) -> dict[str, Any]:
+def upsert_user_supabase(supabase_id: str, email: str) -> dict[str, Any]:
     now = now_iso()
     with get_connection() as conn:
         conn.execute(
             """
-            INSERT INTO users (google_id, email, name, picture, gmail_access_token, gmail_refresh_token, gmail_token_expiry, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(google_id) DO UPDATE SET
+            INSERT INTO users (supabase_id, email, name, picture, created_at, updated_at)
+            VALUES (?, ?, '', '', ?, ?)
+            ON CONFLICT(supabase_id) DO UPDATE SET
                 email=excluded.email,
-                name=excluded.name,
-                picture=excluded.picture,
-                gmail_access_token=CASE WHEN excluded.gmail_access_token <> '' THEN excluded.gmail_access_token ELSE users.gmail_access_token END,
-                gmail_refresh_token=CASE WHEN excluded.gmail_refresh_token <> '' THEN excluded.gmail_refresh_token ELSE users.gmail_refresh_token END,
-                gmail_token_expiry=CASE WHEN excluded.gmail_token_expiry <> '' THEN excluded.gmail_token_expiry ELSE users.gmail_token_expiry END,
                 updated_at=excluded.updated_at
             """,
-            (google_id, email, name, picture, access_token, refresh_token, token_expiry, now, now),
+            (supabase_id, email, now, now),
         )
-        row = conn.execute("SELECT * FROM users WHERE google_id = ?", (google_id,)).fetchone()
+        row = conn.execute("SELECT * FROM users WHERE supabase_id = ?", (supabase_id,)).fetchone()
     return dict(row)
 
 
@@ -1025,8 +1004,8 @@ async def _refresh_gmail_token(refresh_token: str, user_id: int) -> str:
         resp = await client.post(
             "https://oauth2.googleapis.com/token",
             data={
-                "client_id": GOOGLE_CLIENT_ID,
-                "client_secret": GOOGLE_CLIENT_SECRET,
+                "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
+                "client_secret": os.getenv("GOOGLE_CLIENT_SECRET", ""),
                 "refresh_token": refresh_token,
                 "grant_type": "refresh_token",
             },
@@ -1145,12 +1124,8 @@ def adopt_orphan_leads(user_id: int) -> None:
         return
     with get_connection() as conn:
         user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-        if is_auth_disabled() or user_count <= 1:
+        if user_count <= 1:
             conn.execute("UPDATE leads SET user_id = ? WHERE user_id IS NULL", (user_id,))
-
-
-def is_google_oauth_configured() -> bool:
-    return bool(GOOGLE_CLIENT_ID.strip() and GOOGLE_CLIENT_SECRET.strip())
 
 
 class ContactFormHTMLParser(HTMLParser):
@@ -1647,43 +1622,87 @@ def privacy(request: Request) -> HTMLResponse:
     )
 
 
-@app.get("/auth/login")
-async def auth_login(request: Request) -> RedirectResponse:
-    if is_auth_disabled():
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request, error: str = "") -> HTMLResponse:
+    user = get_current_user(request)
+    if user:
         return RedirectResponse("/")
-    if not is_google_oauth_configured():
-        msg = "Google OAuthが未設定です。GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET を設定してください。"
-        return RedirectResponse(url=f"/?oauth_error={quote_plus(msg)}")
-    redirect_uri = f"{APP_BASE_URL}/auth/callback"
-    return await oauth.google.authorize_redirect(request, redirect_uri)
+    return templates.TemplateResponse(
+        "login.html",
+        {"request": request, "app_base_url": APP_BASE_URL, "error": error, "supabase_configured": is_supabase_configured()},
+    )
 
 
-@app.get("/auth/callback")
-async def auth_callback(request: Request) -> RedirectResponse:
+@app.get("/auth/login", response_class=HTMLResponse)
+def auth_login_redirect(request: Request) -> RedirectResponse:
+    return RedirectResponse("/login")
+
+
+@app.post("/auth/login")
+async def auth_login_post(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+) -> RedirectResponse:
+    if not is_supabase_configured():
+        return RedirectResponse(url=f"/login?error={quote_plus('Supabase認証が設定されていません')}", status_code=303)
     try:
-        token = await oauth.google.authorize_access_token(request)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"OAuth認証エラー: {exc}") from exc
-
-    user_info = token.get("userinfo") or {}
-    google_id = user_info.get("sub", "")
-    email = user_info.get("email", "")
-    name = user_info.get("name", "")
-    picture = user_info.get("picture", "")
-
-    if not google_id or not email:
-        raise HTTPException(status_code=400, detail="Googleアカウント情報の取得に失敗しました")
-
-    access_token = token.get("access_token", "")
-    refresh_token = token.get("refresh_token", "")
-    expires_in = int(token.get("expires_in", 3600))
-    token_expiry = (datetime.now(UTC) + timedelta(seconds=expires_in)).isoformat()
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
+                headers={"apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json"},
+                json={"email": email, "password": password},
+            )
+        if resp.status_code != 200:
+            data = resp.json()
+            msg = data.get("error_description") or data.get("msg") or "ログインに失敗しました"
+            return RedirectResponse(url=f"/login?error={quote_plus(msg)}", status_code=303)
+        data = resp.json()
+        supabase_user = data.get("user", {})
+        supabase_id = supabase_user.get("id", "")
+        user_email = supabase_user.get("email", email)
+    except Exception:
+        return RedirectResponse(url=f"/login?error={quote_plus('認証サーバーへの接続に失敗しました')}", status_code=303)
 
     init_db()
-    user = upsert_user(google_id, email, name, picture, access_token, refresh_token, token_expiry)
+    user = upsert_user_supabase(supabase_id, user_email)
     request.session["user_id"] = user["id"]
-    log_audit("login", "user", str(user["id"]), {"email": email})
-    return RedirectResponse("/app")
+    log_audit("login", "user", str(user["id"]), {"email": user_email})
+    return RedirectResponse("/", status_code=303)
+
+
+@app.post("/auth/signup")
+async def auth_signup_post(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+) -> RedirectResponse:
+    if not is_supabase_configured():
+        return RedirectResponse(url=f"/login?error={quote_plus('Supabase認証が設定されていません')}", status_code=303)
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                f"{SUPABASE_URL}/auth/v1/signup",
+                headers={"apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json"},
+                json={"email": email, "password": password},
+            )
+        data = resp.json()
+        if resp.status_code not in (200, 201):
+            msg = data.get("error_description") or data.get("msg") or "アカウント登録に失敗しました"
+            return RedirectResponse(url=f"/login?error={quote_plus(msg)}", status_code=303)
+        supabase_id = (data.get("user") or {}).get("id", "") or data.get("id", "")
+        user_email = (data.get("user") or {}).get("email", email)
+    except Exception:
+        return RedirectResponse(url=f"/login?error={quote_plus('認証サーバーへの接続に失敗しました')}", status_code=303)
+
+    if not supabase_id:
+        return RedirectResponse(url=f"/login?error={quote_plus('アカウント登録後、メールを確認してください')}", status_code=303)
+
+    init_db()
+    user = upsert_user_supabase(supabase_id, user_email)
+    request.session["user_id"] = user["id"]
+    log_audit("signup", "user", str(user["id"]), {"email": user_email})
+    return RedirectResponse("/", status_code=303)
 
 
 @app.get("/auth/logout")

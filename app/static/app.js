@@ -321,7 +321,7 @@ async function loadUserBadge() {
     // ゲストモード: ログインボタン + ゲスト案内を表示
     sidebarFoot.innerHTML = `
       <div style="padding:12px 8px 8px 8px;">
-        <a href="${API_BASE_URL}/auth/login" style="display:block;text-align:center;padding:8px 0;background:#533afd;color:#fff;font-weight:600;border-radius:6px;font-size:14px;text-decoration:none;margin-bottom:8px;">Googleでログイン</a>
+        <a href="${API_BASE_URL}/login" style="display:block;text-align:center;padding:8px 0;background:#533afd;color:#fff;font-weight:600;border-radius:6px;font-size:14px;text-decoration:none;margin-bottom:8px;">ログイン / 新規登録</a>
         <div style="font-size:11px;color:#8898aa;text-align:center;line-height:1.5;">ゲストモード：1日3回・5件まで取得可<br>ログインで全機能が使えます</div>
       </div>
     `;
