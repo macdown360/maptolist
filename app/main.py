@@ -1694,11 +1694,17 @@ async def auth_login_post(
         supabase_user = data.get("user", {})
         supabase_id = supabase_user.get("id", "")
         user_email = supabase_user.get("email", email)
+        email_confirmed = bool(
+            supabase_user.get("email_confirmed_at") or supabase_user.get("confirmed_at")
+        )
     except Exception:
         return RedirectResponse(url=f"/login?error={quote_plus('認証サーバーへの接続に失敗しました')}", status_code=303)
 
     if not supabase_id:
         return RedirectResponse(url=f"/login?error={quote_plus('ログインに失敗しました')}", status_code=303)
+    if not email_confirmed:
+        msg = "メールアドレスが確認されていません。登録時に送信された確認メールのリンクをクリックしてください。"
+        return RedirectResponse(url=f"/login?error={quote_plus(msg)}", status_code=303)
 
     init_db()
     user = upsert_user_supabase(supabase_id, user_email)
