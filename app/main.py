@@ -1760,8 +1760,6 @@ def auth_me(user: Optional[dict[str, Any]] = Depends(get_current_user)):
     return {
         "id": user["id"],
         "email": user["email"],
-        "name": user["name"],
-        "picture": user["picture"],
         "gmail_connected": bool(user.get("gmail_refresh_token") or user.get("gmail_access_token")),
         "maps_key_configured": bool(user.get("maps_api_key")),
     }
@@ -2405,7 +2403,7 @@ def send_form(request: Request, payload: ContactRequest, user: Optional[dict[str
 
     dry_run = os.getenv("FORM_DRY_RUN", "true").lower() == "true"
     from_email = user["email"]
-    from_name = user.get("name") or os.getenv("CONTACT_FROM_NAME", "Map to List")
+    from_name = os.getenv("CONTACT_FROM_NAME", "Map to List")
 
     sent = 0
     skipped = 0
