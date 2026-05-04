@@ -13,7 +13,7 @@ from typing import Any
 import psycopg2
 import psycopg2.extras
 
-DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+
 
 
 class _CursorProxy:
@@ -72,12 +72,13 @@ def get_connection() -> Any:
         with get_connection() as conn:
             rows = conn.execute("SELECT ...", (param,)).fetchall()
     """
-    if not DATABASE_URL:
+    database_url = os.getenv("DATABASE_URL", "")
+    if not database_url:
         raise RuntimeError(
             "DATABASE_URL が設定されていません。"
             "Supabase の接続文字列を environment variable に設定してください。"
         )
-    raw = psycopg2.connect(DATABASE_URL, connect_timeout=10)
+    raw = psycopg2.connect(database_url, connect_timeout=10)
     proxy = _ConnProxy(raw)
     try:
         yield proxy
