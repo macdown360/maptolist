@@ -937,6 +937,25 @@ def get_current_user(request: Request) -> dict[str, Any] | None:
     return None
 
 
+_SUPABASE_ERROR_JA: dict[str, str] = {
+    "invalid login credentials": "メールアドレスまたはパスワードが正しくありません",
+    "email not confirmed": "メールアドレスが確認されていません。確認メールをご確認ください",
+    "user already registered": "このメールアドレスはすでに登録されています",
+    "password should be at least 6 characters": "パスワードは6文字以上で入力してください",
+    "unable to validate email address: invalid format": "メールアドレスの形式が正しくありません",
+    "email rate limit exceeded": "メール送信の上限に達しました。しばらくしてからお試しください",
+    "signup is disabled": "新規登録は現在無効になっています",
+    "email link is invalid or has expired": "リンクが無効または期限切れです",
+}
+
+def _ja_auth_error(data: dict) -> str:
+    raw = (data.get("error_description") or data.get("msg") or "").lower()
+    for key, ja in _SUPABASE_ERROR_JA.items():
+        if key in raw:
+            return ja
+    return raw or "認証に失敗しました"
+
+
 def require_user(request: Request) -> dict[str, Any]:
     user = get_current_user(request)
     if not user:
@@ -1674,8 +1693,7 @@ async def auth_login_post(
             supabase_id = (data2.get("user") or {}).get("id", "")
             user_email = (data2.get("user") or {}).get("email", email)
             if not supabase_id:
-                data = resp.json()
-                msg = data.get("error_description") or data.get("msg") or "ログインに失敗しました"
+                msg = _ja_auth_error(resp.json())
                 return RedirectResponse(url=f"/login?error={quote_plus(msg)}", status_code=303)
         else:
             data = resp.json()
@@ -1709,7 +1727,7 @@ async def auth_signup_post(
             )
         data = resp.json()
         if resp.status_code not in (200, 201):
-            msg = data.get("error_description") or data.get("msg") or "アカウント登録に失敗しました"
+            msg = _ja_auth_error(data)
             return RedirectResponse(url=f"/login?error={quote_plus(msg)}", status_code=303)
         supabase_id = (data.get("user") or {}).get("id", "") or data.get("id", "")
         user_email = (data.get("user") or {}).get("email", email)
