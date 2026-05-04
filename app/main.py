@@ -1651,13 +1651,19 @@ def privacy(request: Request) -> HTMLResponse:
 
 
 @app.get("/login", response_class=HTMLResponse)
-def login_page(request: Request, error: str = "") -> HTMLResponse:
+def login_page(request: Request, error: str = "", info: str = "") -> HTMLResponse:
     user = get_current_user(request)
     if user:
         return RedirectResponse("/")
     return templates.TemplateResponse(
         "login.html",
-        {"request": request, "app_base_url": APP_BASE_URL, "error": error, "supabase_configured": is_supabase_configured()},
+        {
+            "request": request,
+            "app_base_url": APP_BASE_URL,
+            "error": error,
+            "info": info,
+            "supabase_configured": is_supabase_configured(),
+        },
     )
 
 
@@ -1682,26 +1688,17 @@ async def auth_login_post(
                 json={"email": email, "password": password},
             )
         if resp.status_code != 200:
-            # メール未確認の場合、signupエンドポイントでも試みる
-            async with httpx.AsyncClient(timeout=15) as client:
-                resp2 = await client.post(
-                    f"{SUPABASE_URL}/auth/v1/signup",
-                    headers={"apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json"},
-                    json={"email": email, "password": password},
-                )
-            data2 = resp2.json()
-            supabase_id = (data2.get("user") or {}).get("id", "")
-            user_email = (data2.get("user") or {}).get("email", email)
-            if not supabase_id:
-                msg = _ja_auth_error(resp.json())
-                return RedirectResponse(url=f"/login?error={quote_plus(msg)}", status_code=303)
-        else:
-            data = resp.json()
-            supabase_user = data.get("user", {})
-            supabase_id = supabase_user.get("id", "")
-            user_email = supabase_user.get("email", email)
+            msg = _ja_auth_error(resp.json())
+            return RedirectResponse(url=f"/login?error={quote_plus(msg)}", status_code=303)
+        data = resp.json()
+        supabase_user = data.get("user", {})
+        supabase_id = supabase_user.get("id", "")
+        user_email = supabase_user.get("email", email)
     except Exception:
         return RedirectResponse(url=f"/login?error={quote_plus('認証サーバーへの接続に失敗しました')}", status_code=303)
+
+    if not supabase_id:
+        return RedirectResponse(url=f"/login?error={quote_plus('ログインに失敗しました')}", status_code=303)
 
     init_db()
     user = upsert_user_supabase(supabase_id, user_email)
@@ -1729,14 +1726,20 @@ async def auth_signup_post(
         if resp.status_code not in (200, 201):
             msg = _ja_auth_error(data)
             return RedirectResponse(url=f"/login?error={quote_plus(msg)}", status_code=303)
-        supabase_id = (data.get("user") or {}).get("id", "") or data.get("id", "")
-        user_email = (data.get("user") or {}).get("email", email)
+        user_obj = data.get("user") or {}
+        supabase_id = user_obj.get("id", "") or data.get("id", "")
+        user_email = user_obj.get("email", email)
+        access_token = data.get("access_token")
+        email_confirmed = bool(user_obj.get("email_confirmed_at") or user_obj.get("confirmed_at"))
     except Exception:
         return RedirectResponse(url=f"/login?error={quote_plus('認証サーバーへの接続に失敗しました')}", status_code=303)
 
-    if not supabase_id:
-        return RedirectResponse(url=f"/login?error={quote_plus('アカウント登録後、メールを確認してください')}", status_code=303)
+    # メール確認が必要な場合: ローカルセッションは作らず、確認メール送付の案内を表示
+    if not access_token or not email_confirmed:
+        info = "確認メールを送信しました。メール内のリンクをクリックしてアカウントを有効化したあと、ログインしてください。"
+        return RedirectResponse(url=f"/login?info={quote_plus(info)}", status_code=303)
 
+    # メール確認が無効な環境: 即時ログイン
     init_db()
     user = upsert_user_supabase(supabase_id, user_email)
     request.session["user_id"] = user["id"]

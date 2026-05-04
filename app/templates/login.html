@@ -134,6 +134,17 @@
       font-size: 13px;
       text-align: left;
     }
+    .info {
+      margin-bottom: 20px;
+      padding: 10px 12px;
+      border-radius: 4px;
+      border: 1px solid #c7e8d4;
+      background: #f0faf4;
+      color: #108c3d;
+      font-size: 13px;
+      text-align: left;
+      line-height: 1.6;
+    }
     .footer-note {
       margin-top: 24px;
       font-size: 12px;
@@ -164,6 +175,10 @@
   <div class="login-card">
     <h1 class="brand-title"><span class="logo-map">map</span><span class="logo-to">to</span><span class="logo-list">list</span></h1>
     <p class="brand-sub">List generate workspace</p>
+
+    {% if info %}
+    <div class="info">{{ info }}</div>
+    {% endif %}
 
     {% if error %}
     <div class="alert">{{ error }}</div>
