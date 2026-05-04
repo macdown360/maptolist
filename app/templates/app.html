@@ -53,7 +53,7 @@
 			<section class="view active" id="view-import">
 				<div class="g-layout">
 					<div class="g-center">
-						<h1 class="g-greeting">{% if user %}こんにちは、<span class="g-name">{{ user.name }}</span>さん{% else %}こんにちは{% endif %}</h1>
+						<h1 class="g-greeting">{% if user %}こんにちは、<span class="g-name">{{ user.email }}</span>さん{% else %}こんにちは{% endif %}</h1>
 						<p class="g-sub">どのような営業リスト、企業リスト、施設リストを作りますか？</p>
 						<form id="import-form" class="import-search-form">
 							<input type="hidden" name="region" value="">

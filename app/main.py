@@ -530,10 +530,8 @@ def init_db() -> None:
             """
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
-                google_id TEXT UNIQUE NOT NULL,
+                supabase_id TEXT UNIQUE,
                 email TEXT NOT NULL,
-                name TEXT,
-                picture TEXT,
                 maps_api_key TEXT DEFAULT '',
                 gmail_access_token TEXT DEFAULT '',
                 gmail_refresh_token TEXT DEFAULT '',
@@ -620,6 +618,18 @@ def init_db() -> None:
             pass
         try:
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS supabase_id TEXT UNIQUE")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE users DROP COLUMN IF EXISTS google_id")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE users DROP COLUMN IF EXISTS name")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE users DROP COLUMN IF EXISTS picture")
         except Exception:
             pass
 
@@ -944,14 +954,13 @@ def get_or_create_demo_user() -> dict[str, Any]:
     with get_connection() as conn:
         conn.execute(
             """
-            INSERT INTO users (supabase_id, email, name, picture, maps_api_key, gmail_access_token, gmail_refresh_token, gmail_token_expiry, created_at, updated_at)
-            VALUES (?, ?, ?, ?, '', '', '', '', ?, ?)
+            INSERT INTO users (supabase_id, email, created_at, updated_at)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(supabase_id) DO UPDATE SET
                 email=excluded.email,
-                name=excluded.name,
                 updated_at=excluded.updated_at
             """,
-            (DEMO_USER_GOOGLE_ID, DEMO_USER_EMAIL, DEMO_USER_NAME, "", now, now),
+            (DEMO_USER_GOOGLE_ID, DEMO_USER_EMAIL, now, now),
         )
         row = conn.execute("SELECT * FROM users WHERE supabase_id = ?", (DEMO_USER_GOOGLE_ID,)).fetchone()
     return dict(row) if row else {}
@@ -986,8 +995,8 @@ def upsert_user_supabase(supabase_id: str, email: str) -> dict[str, Any]:
     with get_connection() as conn:
         conn.execute(
             """
-            INSERT INTO users (supabase_id, email, name, picture, created_at, updated_at)
-            VALUES (?, ?, '', '', ?, ?)
+            INSERT INTO users (supabase_id, email, created_at, updated_at)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(supabase_id) DO UPDATE SET
                 email=excluded.email,
                 updated_at=excluded.updated_at
@@ -1654,13 +1663,25 @@ async def auth_login_post(
                 json={"email": email, "password": password},
             )
         if resp.status_code != 200:
+            # メール未確認の場合、signupエンドポイントでも試みる
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp2 = await client.post(
+                    f"{SUPABASE_URL}/auth/v1/signup",
+                    headers={"apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json"},
+                    json={"email": email, "password": password},
+                )
+            data2 = resp2.json()
+            supabase_id = (data2.get("user") or {}).get("id", "")
+            user_email = (data2.get("user") or {}).get("email", email)
+            if not supabase_id:
+                data = resp.json()
+                msg = data.get("error_description") or data.get("msg") or "ログインに失敗しました"
+                return RedirectResponse(url=f"/login?error={quote_plus(msg)}", status_code=303)
+        else:
             data = resp.json()
-            msg = data.get("error_description") or data.get("msg") or "ログインに失敗しました"
-            return RedirectResponse(url=f"/login?error={quote_plus(msg)}", status_code=303)
-        data = resp.json()
-        supabase_user = data.get("user", {})
-        supabase_id = supabase_user.get("id", "")
-        user_email = supabase_user.get("email", email)
+            supabase_user = data.get("user", {})
+            supabase_id = supabase_user.get("id", "")
+            user_email = supabase_user.get("email", email)
     except Exception:
         return RedirectResponse(url=f"/login?error={quote_plus('認証サーバーへの接続に失敗しました')}", status_code=303)
 

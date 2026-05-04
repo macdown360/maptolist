@@ -331,7 +331,7 @@ async function loadUserBadge() {
   // ログイン済み: 名前のみ表示（プロフィール写真なし）
   sidebarFoot.innerHTML = `
     <div class="user-card simple-user-card" id="user-badge">
-      <span class="user-name">${escapeHtml(user.name || user.email || 'ユーザー')}</span>
+      <span class="user-name">${escapeHtml(user.email || 'ユーザー')}</span>
     </div>
   `;
   // 詳細モーダル導線
@@ -360,9 +360,7 @@ function showUserDetailModal(user) {
     <div class="user-detail-modal-content">
       <button class="user-detail-modal-close" aria-label="閉じる">×</button>
       <div class="user-detail-modal-main">
-        <img src="${user.picture || '/static/user.svg'}" class="user-avatar user-detail-avatar" alt="user" />
         <div class="user-detail-info">
-          <div class="user-detail-name">${escapeHtml(user.name || 'ユーザー')}</div>
           <div class="user-detail-email">${escapeHtml(user.email || '')}</div>
         </div>
       </div>
